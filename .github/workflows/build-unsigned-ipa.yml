@@ -1,0 +1,65 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unsigned-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build JavStrm unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check build environment
+        run: |
+          xcodebuild -version
+          xcrun swift --version
+          xcrun --sdk iphoneos --show-sdk-path
+
+      - name: Verify core and project
+        run: bash scripts/verify.sh
+
+      - name: Build and inspect unsigned IPA
+        run: bash scripts/build_ipa.sh unsigned
+
+      - name: Upload unsigned IPA and inspection report
+        uses: actions/upload-artifact@v4
+        with:
+          name: JavStrm-unsigned-ipa-${{ github.run_number }}
+          path: |
+            build/ipa-*/JavStrm-unsigned.ipa
+            build/ipa-*/JavStrm-unsigned.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload build logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: JavStrm-build-logs-${{ github.run_number }}
+          path: build/ipa-*/*.log
+          if-no-files-found: ignore
+          retention-days: 14
