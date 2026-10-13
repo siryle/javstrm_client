@@ -90,7 +90,13 @@ public struct LibraryMovie: Decodable, Identifiable, Sendable {
     public let tags: [LibraryTag]?
     public let scrapeStatus: String
     public let watched: Bool
-    public var artwork: String { poster ?? cover ?? fanart ?? "" }
+    public var artwork: String { firstArtwork(poster, cover, fanart) }
+    public var landscapeArtwork: String { firstArtwork(fanart, cover, poster) }
+    public var cropArtwork: String { firstArtwork(fanart, cover) }
+
+    private func firstArtwork(_ sources: String?...) -> String {
+        sources.compactMap { $0 }.first { !$0.isEmpty } ?? ""
+    }
 }
 
 public struct LibraryPage: Decodable, Sendable {

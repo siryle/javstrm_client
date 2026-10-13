@@ -90,6 +90,10 @@ public actor APIClient {
         storeCookie(response)
     }
 
+    public func cropLibraryPoster(movieID: Int, crop: PosterCrop) async throws {
+        try await discard("POST", "/api/library/movies/\(movieID)/crop-poster", body: crop.body)
+    }
+
     public func imageData(_ source: String) async throws -> Data {
         let request: URLRequest
         if source.hasPrefix("/api/library/artwork/") {

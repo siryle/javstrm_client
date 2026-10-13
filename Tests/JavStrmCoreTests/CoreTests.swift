@@ -23,7 +23,12 @@ struct CoreVerification {
             print("PASS: SSE parser")
             try fixtures()
             print("PASS: backend fixtures")
+            try artwork()
+            try posterCrops()
+            print("PASS: library artwork sources and poster crop geometry")
             try await transport()
+            try await cropTransport()
+            print("PASS: authenticated poster crop requests, empty success responses and server errors")
             try await events()
             print("PASS: address validation, SSE parser/transport, 7 backend fixtures, login cookies, auth expiration/isolation, service detection, null lists, image proxy")
         } catch {
@@ -135,6 +140,83 @@ struct CoreVerification {
         await client.adoptBrowserToken(nil)
         let loggedOut = await client.currentToken()
         try check(loggedOut == nil)
+        await client.close()
+    }
+
+    static func artwork() throws {
+        let decoder = WireJSON.decoder()
+        let page = try decoder.decode(LibraryPage.self, from: fixture("library_movies"))
+        let movie = try require(page.movies?.first)
+        try check(movie.artwork == movie.poster)
+        try check(movie.landscapeArtwork == movie.fanart)
+        try check(movie.cropArtwork == movie.fanart)
+        var payload = try require(JSONSerialization.jsonObject(with: fixture("library_movies")) as? [String: Any])
+        var movies = try require(payload["movies"] as? [[String: Any]])
+        movies[0]["poster"] = ""
+        movies[0]["fanart"] = ""
+        payload["movies"] = movies
+        let fallback = try require(decoder.decode(
+            LibraryPage.self, from: JSONSerialization.data(withJSONObject: payload)).movies?.first)
+        try check(fallback.artwork == movie.cover)
+        try check(fallback.landscapeArtwork == movie.cover)
+        try check(fallback.cropArtwork == movie.cover)
+        movies[0]["cover"] = ""
+        movies[0]["poster"] = "/api/library/artwork/poster-only"
+        payload["movies"] = movies
+        let posterOnly = try require(decoder.decode(
+            LibraryPage.self, from: JSONSerialization.data(withJSONObject: payload)).movies?.first)
+        try check(posterOnly.landscapeArtwork == "/api/library/artwork/poster-only")
+        try check(posterOnly.cropArtwork.isEmpty)
+        let empty = try require(page.movies?.last)
+        try check(empty.artwork.isEmpty && empty.landscapeArtwork.isEmpty && empty.cropArtwork.isEmpty)
+    }
+
+    static func posterCrops() throws {
+        let initial = try require(PosterCropSelection(imageWidth: 900, imageHeight: 600))
+        try check(initial.crop == PosterCrop(x: 500, y: 0, width: 400, height: 600))
+        let smaller = initial.resized(widthDelta: -200)
+        try check(smaller.crop.width == 200 && smaller.crop.height == 300)
+        let moved = smaller.moved(dx: -1000, dy: 1000)
+        try check(moved.crop.x == 0 && moved.crop.y == 300)
+        try check(moved.resized(widthDelta: 1000).crop.width == 200)
+        let minimum = initial.resized(widthDelta: -1000)
+        try check(minimum.crop.width == 2 && minimum.crop.height == 3)
+        let portrait = try require(PosterCropSelection(imageWidth: 200, imageHeight: 900))
+        try check(portrait.crop.width == 200 && portrait.crop.height == 300)
+        try check(PosterCropSelection(imageWidth: 1, imageHeight: 600) == nil)
+        try check(PosterCropSelection(imageWidth: 600, imageHeight: 2) == nil)
+        for width in [2, 49, 199, 601, 901, 1920] {
+            for height in [3, 51, 301, 599, 1080] {
+                let selection = try require(PosterCropSelection(imageWidth: width, imageHeight: height))
+                for delta in [-10000.0, -48.5, 0, 27.3, 10000] {
+                    let adjusted = selection.resized(widthDelta: delta)
+                        .moved(dx: delta, dy: -delta)
+                        .resized(widthDelta: -delta, minimumWidth: 48)
+                    let crop = adjusted.crop
+                    try check(crop.x >= 0 && crop.y >= 0 && crop.width >= 2 && crop.height >= 2)
+                    try check(crop.x + crop.width <= width && crop.y + crop.height <= height)
+                    try check(abs(adjusted.width / adjusted.height - PosterCropSelection.ratio) < 0.000001)
+                }
+            }
+        }
+    }
+
+    static func cropTransport() async throws {
+        let client = try mockClient()
+        await client.adoptBrowserToken(SessionToken(value: "crop-session"))
+        let crop = try require(PosterCropSelection(imageWidth: 900, imageHeight: 600)).crop
+        MockURLProtocol.handler = { request in
+            try check(request.httpMethod == "POST" && request.url?.path == "/api/library/movies/7/crop-poster")
+            try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=crop-session")
+            let body = try JSONDecoder().decode([String: Int].self, from: requestBody(request))
+            try check(body == ["x": 500, "y": 0, "width": 400, "height": 600])
+            return (204, [:], Data())
+        }
+        try await client.cropLibraryPoster(movieID: 7, crop: crop)
+        MockURLProtocol.handler = { _ in (409, [:], Data(#"{"error":"no source artwork"}"#.utf8)) }
+        try await expect(.http(409, "no source artwork")) {
+            try await client.cropLibraryPoster(movieID: 7, crop: crop)
+        }
         await client.close()
     }
 

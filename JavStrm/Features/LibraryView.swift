@@ -17,6 +17,7 @@ struct LibraryView: View {
     @State private var requestID = UUID()
     @State private var confirmScan = false
     @State private var scanning = false
+    @State private var croppingMovie: LibraryMovie?
     private let columns = [GridItem(.adaptive(minimum: 145, maximum: 220), spacing: 16)]
 
     private var filtered: [LibraryMovie] {
@@ -68,13 +69,23 @@ struct LibraryView: View {
                 } else {
                     LazyVGrid(columns: columns, spacing: 22) {
                         ForEach(filtered) { movie in
-                            NavigationLink {
-                                LibraryDetailView(movie: movie)
-                            } label: {
-                                MovieCard(code: movie.code, title: movie.title, artwork: movie.artwork,
-                                          rating: movie.rating, artworkLayout: .portrait)
+                            VStack(alignment: .leading, spacing: 8) {
+                                NavigationLink {
+                                    LibraryDetailView(movie: movie)
+                                        .toolbar {
+                                            ToolbarItem(placement: .topBarTrailing) {
+                                                cropButton(for: movie)
+                                            }
+                                        }
+                                } label: {
+                                    MovieCard(code: movie.code, title: movie.title, artwork: movie.artwork,
+                                              rating: movie.rating, artworkLayout: .portrait)
+                                }
+                                .buttonStyle(.plain)
+                                cropButton(for: movie)
+                                    .buttonStyle(.bordered)
+                                    .font(.caption)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -125,36 +136,68 @@ struct LibraryView: View {
         }
         .task(id: "\(selectedTab)|\(recentOnly)") { await load(reset: true) }
         .onChange(of: session.revisions?.library) { old, new in
-            if old != nil, old != new { Task { await load(reset: true) } }
+            if old != nil, old != new {
+                Task { await load(reset: true, preservingLoadedPages: true) }
+            }
         }
         .refreshable { await load(reset: true) }
+        .sheet(item: $croppingMovie) { movie in
+            NavigationStack {
+                PosterCropView(movie: movie) {
+                    await load(reset: true, preservingLoadedPages: true)
+                }
+            }
+        }
     }
 
-    private func load(reset: Bool) async {
+    private func cropButton(for movie: LibraryMovie) -> some View {
+        Button {
+            croppingMovie = movie
+        } label: {
+            Label("裁切封面", systemImage: "crop")
+        }
+        .disabled(hideArtwork || movie.cropArtwork.isEmpty)
+        .accessibilityLabel("裁切 \(movie.code) 封面")
+    }
+
+    private func load(reset: Bool, preservingLoadedPages: Bool = false) async {
         guard let api = session.client, reset || !loading else { return }
         let request = UUID()
         requestID = request
         loading = true
         error = nil
-        if reset { movies = []; page = 0; total = 0; hasMore = false }
+        let lastPage = reset && preservingLoadedPages ? max(1, page) : 1
+        if reset && !preservingLoadedPages { movies = []; page = 0; total = 0; hasMore = false }
         let nextPage = reset ? 1 : page + 1
-        var query = [
-            URLQueryItem(name: "page", value: String(nextPage)),
-            URLQueryItem(name: "limit", value: "30")
-        ]
-        if recentOnly { query.append(URLQueryItem(name: "view", value: "new")) }
-        if !selectedTab.isEmpty { query.append(URLQueryItem(name: "tab", value: selectedTab)) }
+        let connection = session.connectionID
+        let tab = selectedTab
+        let recent = recentOnly
         defer { if requestID == request { loading = false } }
         do {
-            let result: LibraryPage = try await api.get("/api/library/movies", query: query)
-            guard !Task.isCancelled, requestID == request else { return }
+            var refreshed: [LibraryMovie] = []
+            var result: LibraryPage?
+            for currentPage in nextPage...max(nextPage, lastPage) {
+                var query = [
+                    URLQueryItem(name: "page", value: String(currentPage)),
+                    URLQueryItem(name: "limit", value: "30")
+                ]
+                if recent { query.append(URLQueryItem(name: "view", value: "new")) }
+                if !tab.isEmpty { query.append(URLQueryItem(name: "tab", value: tab)) }
+                let current: LibraryPage = try await api.get("/api/library/movies", query: query)
+                guard !Task.isCancelled, requestID == request, connection == session.connectionID else { return }
+                refreshed += current.movies ?? []
+                result = current
+                if !current.hasMore { break }
+            }
+            guard let result else { return }
+            if reset { movies = [] }
             let existing = Set(movies.map(\.id))
-            movies += (result.movies ?? []).filter { !existing.contains($0.id) }
+            movies += refreshed.filter { !existing.contains($0.id) }
             page = result.page
             total = result.total
             hasMore = result.hasMore
         } catch {
-            guard !Task.isCancelled, requestID == request else { return }
+            guard !Task.isCancelled, requestID == request, connection == session.connectionID else { return }
             self.error = session.describe(error)
             session.handle(error)
         }
@@ -166,8 +209,8 @@ private struct LibraryDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                PosterView(source: movie.artwork, code: movie.code, layout: .portrait)
-                    .frame(maxWidth: 260)
+                PosterView(source: movie.landscapeArtwork, code: movie.code, layout: .landscape)
+                    .frame(maxWidth: 560)
                     .frame(maxWidth: .infinity)
                 Text(movie.code).font(.system(.title, design: .monospaced).weight(.bold))
                 Text(movie.title.isEmpty ? "等待元数据" : movie.title).font(.title3.weight(.semibold))

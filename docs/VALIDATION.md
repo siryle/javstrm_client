@@ -52,7 +52,7 @@ bash scripts/verify.sh
 | 客户端模块 | 服务端接口 |
 | --- | --- |
 | 登录 | `GET /api/auth/config`、`POST /api/auth/login`、`POST /api/auth/logout` |
-| 媒体库 | `GET /api/library/tabs`、`GET /api/library/movies`、`POST /api/library/scan` |
+| 媒体库 | `GET /api/library/tabs`、`GET /api/library/movies`、`POST /api/library/scan`、`POST /api/library/movies/:id/crop-poster` |
 | 发现与详情 | `GET /api/discover/movies`、`GET /api/discover/search`、`GET /api/discover/movies/:id` |
 | 磁力与离线 | `GET /api/discover/movies/:id/magnets`、`POST /api/discover/movies/:id/offline`、`GET /api/offline/tasks`、`POST /api/offline/tasks/:id/terminate` |
 | 订阅 | `GET /api/subscriptions`、`POST /api/subscriptions`、`PATCH /api/subscriptions/:id`、`DELETE /api/subscriptions/:id`、`POST /api/subscriptions/:id/enqueue`、`GET /api/subscriptions/actors/:id/feed` |
@@ -62,3 +62,13 @@ bash scripts/verify.sh
 | 账号与文件 | `GET /api/pan/account`、`GET /api/pan/files`、`GET /api/files/local` |
 | 日志与图片 | `GET /api/logs`、`GET /api/image`、`GET /api/library/artwork/:key` |
 | 高级管理页面 | `/settings`、`/tools`、`/files`、`/tasks` |
+
+## 媒体库横向图与封面裁切变更验证
+
+日期：2026-10-13（Asia/Shanghai）。
+
+- 已核对本地后端 `web/src/features/library/poster-crop-dialog.tsx`、`web/src/api/library.ts` 和 `internal/library/library.go`：裁切源优先使用 fanart，回退 cover；默认右侧 2:3 选框；保存提交原图像素坐标到 `POST /api/library/movies/:id/crop-poster`。
+- 客户端详情改为 3:2 横向图容器，完整显示 fanart / cover；卡片继续优先展示 poster。裁切选框使用原图像素保存状态，界面尺寸改变时保持所选区域。
+- 已添加回归用例：横向图及海报选源、空 URL 回退、仅有 poster 时禁止裁切、默认选区、移动和缩放边界、小图与竖图、取整后的像素边界、带会话的裁切请求、空成功响应及服务端错误。
+- 本次通过 Tree-sitter 对 22 个 Swift 文件进行语法检查；Xcode 工程源文件引用、Scheme / workspace XML、资源 JSON 与 property list 检查通过。语法检查不等于 Swift 编译器类型检查。
+- 本次环境未找到 Xcode / Command Line Tools，`bash scripts/verify.sh` 在启动 Swift 时失败。新增 Swift 回归用例尚未执行，iOS 编译、拖动交互和真实服务保存仍需在具备 Xcode 的环境验证；此前的构建记录不代表本次变更已完成编译。
