@@ -172,12 +172,13 @@ struct MovieCard: View {
     let artwork: String
     let rating: Double
     let artworkLayout: ArtworkLayout
+    var showsRating = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             PosterView(source: artwork, code: code, layout: artworkLayout)
                 .overlay(alignment: .bottomTrailing) {
-                    if rating > 0 {
+                    if showsRating && rating > 0 {
                         Label(rating.formatted(.number.precision(.fractionLength(1))), systemImage: "star.fill")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.white)

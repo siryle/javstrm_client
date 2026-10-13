@@ -140,8 +140,30 @@ public struct DiscoverMovie: Decodable, Identifiable, Sendable {
     public let series: NamedEntity?
     public let director: NamedEntity?
     public let state: String?
+    public let releaseStatus: String?
     public let zone: String?
     public var artwork: String { cover ?? thumbnail ?? "" }
+
+    public func cardAction(subscriptionStatus: String?, currentState: String? = nil) -> DiscoverMovieCardAction? {
+        let state = currentState ?? self.state
+        if state == "in_library" { return .inLibrary }
+        if state == "saving" || state == "processing" || subscriptionStatus == "added" {
+            return .addedOffline
+        }
+        if subscriptionStatus == "waiting" { return .subscribed }
+        if (magnetsCount ?? 0) > 0 || releaseStatus == "upcoming" { return .subscribe }
+        return nil
+    }
+}
+
+public enum DiscoverMovieCardAction: Sendable, Equatable {
+    case subscribe, subscribed, inLibrary, addedOffline
+}
+
+public struct DiscoverMovieState: Decodable, Identifiable, Sendable {
+    public let id: String
+    public let libraryId: Int?
+    public let state: String
 }
 
 public struct Magnet: Decodable, Identifiable, Sendable {

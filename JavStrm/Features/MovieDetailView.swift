@@ -8,7 +8,7 @@ struct MovieDetailView: View {
     @State private var movie: DiscoverMovie?
     @State private var subscription: Subscription?
     @State private var subscriptionReady = false
-    @State private var autoDownload = false
+    @State private var autoDownload = true
     @State private var error: String?
     @State private var subscriptionError: String?
     @State private var loading = false
@@ -176,9 +176,7 @@ struct MovieDetailView: View {
         busy = true
         Task {
             await session.perform(success: "作品已订阅。") { api in
-                let _: Subscription = try await api.send("POST", "/api/subscriptions", body: [
-                    "kind": .string("movie"), "target_id": .string(id), "auto_download": .bool(auto)
-                ])
+                let _ = try await api.subscribeMovie(targetID: id, autoDownload: auto)
             }
             await loadSubscription()
             busy = false

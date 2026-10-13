@@ -23,6 +23,9 @@ struct CoreVerification {
             print("PASS: SSE parser")
             try fixtures()
             print("PASS: backend fixtures")
+            try discoverCardActions()
+            try await discoverActionsTransport()
+            print("PASS: discovery card states, paginated subscriptions, automatic download defaults and batched movie states")
             try taskDetails()
             print("PASS: workflow progress selection, Chinese labels and per-item result fields")
             try artwork()
@@ -103,6 +106,108 @@ struct CoreVerification {
         ]
         payload[type == "subscription_batch" ? "batch" : type] = .object(details)
         return try WireJSON.decoder().decode(ServerTask.self, from: JSONEncoder().encode(payload))
+    }
+
+    static func discoverCardActions() throws {
+        var payload = try require(JSONSerialization.jsonObject(with: fixture("discover_movie")) as? [String: Any])
+        func movie() throws -> DiscoverMovie {
+            try WireJSON.decoder().decode(DiscoverMovie.self, from: JSONSerialization.data(withJSONObject: payload))
+        }
+        try check(movie().cardAction(subscriptionStatus: nil) == .addedOffline)
+        payload["state"] = "processing"
+        try check(movie().cardAction(subscriptionStatus: "waiting") == .addedOffline)
+        payload["state"] = "in_library"
+        try check(movie().cardAction(subscriptionStatus: "added") == .inLibrary)
+        payload["state"] = "not_in_library"
+        try check(movie().cardAction(subscriptionStatus: nil) == .subscribe)
+        try check(movie().cardAction(subscriptionStatus: "waiting") == .subscribed)
+        try check(movie().cardAction(subscriptionStatus: "added") == .addedOffline)
+        for status in ["stale", "error"] {
+            try check(movie().cardAction(subscriptionStatus: status) == .subscribe)
+        }
+        try check(movie().cardAction(subscriptionStatus: "waiting", currentState: "in_library") == .inLibrary)
+        try check(movie().cardAction(subscriptionStatus: nil, currentState: "saving") == .addedOffline)
+        payload["state"] = "in_library"
+        try check(movie().cardAction(subscriptionStatus: nil, currentState: "not_in_library") == .subscribe)
+        payload["state"] = "not_in_library"
+        payload["magnets_count"] = 0
+        try check(movie().cardAction(subscriptionStatus: nil) == nil)
+        try check(movie().cardAction(subscriptionStatus: "waiting") == .subscribed)
+        try check(movie().cardAction(subscriptionStatus: "added") == .addedOffline)
+        payload["release_status"] = "upcoming"
+        try check(movie().cardAction(subscriptionStatus: nil) == .subscribe)
+        payload.removeValue(forKey: "release_status")
+        payload.removeValue(forKey: "magnets_count")
+        payload.removeValue(forKey: "state")
+        try check(movie().cardAction(subscriptionStatus: nil) == nil)
+    }
+
+    static func discoverActionsTransport() async throws {
+        let client = try mockClient()
+        await client.adoptBrowserToken(SessionToken(value: "discover-session"))
+        let records = try require(JSONSerialization.jsonObject(with: fixture("subscriptions")) as? [[String: Any]])
+        let subscription = try require(records.first)
+        let response = try JSONSerialization.data(withJSONObject: subscription)
+        for automatic in [true, false] {
+            MockURLProtocol.handler = { request in
+                try check(request.httpMethod == "POST" && request.url?.path == "/api/subscriptions")
+                try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=discover-session")
+                let body = try JSONDecoder().decode([String: JSONValue].self, from: requestBody(request))
+                try check(body["kind"] == .string("movie") && body["target_id"] == .string("movie-upcoming"))
+                try check(body["auto_download"] == .bool(automatic))
+                return (201, [:], response)
+            }
+            if automatic {
+                let result = try await client.subscribeMovie(targetID: "movie-upcoming")
+                try check(result.targetId == "movie-upcoming")
+            } else {
+                let _ = try await client.subscribeMovie(targetID: "movie-upcoming", autoDownload: false)
+            }
+        }
+        let firstPage = try JSONSerialization.data(withJSONObject: (1...100).map { id in
+            var item = subscription
+            item["id"] = id
+            item["target_id"] = "movie-\(id)"
+            return item
+        })
+        let lastPage = try JSONSerialization.data(withJSONObject: records)
+        MockURLProtocol.handler = { request in
+            try check(request.httpMethod == "GET" && request.url?.path == "/api/subscriptions")
+            try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=discover-session")
+            let query = URLComponents(url: try require(request.url), resolvingAgainstBaseURL: false)?.queryItems
+            try check(query?.first { $0.name == "kind" }?.value == "movie")
+            try check(query?.first { $0.name == "limit" }?.value == "100")
+            let page = query?.first { $0.name == "page" }?.value
+            try check(page == "1" || page == "2")
+            return (200, [:], page == "1" ? firstPage : lastPage)
+        }
+        let items = try await client.subscriptions(kind: "movie")
+        try check(items.count == 102 && items.last?.status == "added")
+        MockURLProtocol.handler = { _ in (200, [:], Data("null".utf8)) }
+        let empty = try await client.subscriptions(kind: "movie")
+        try check(empty.isEmpty)
+
+        let movie = try WireJSON.decoder().decode(DiscoverMovie.self, from: fixture("discover_movie"))
+        MockURLProtocol.handler = { request in
+            try check(request.httpMethod == "POST" && request.url?.path == "/api/discover/movie-states")
+            try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=discover-session")
+            let body = try JSONDecoder().decode([String: JSONValue].self, from: requestBody(request))
+            guard case let .array(movies) = body["movies"] else { throw Failure("Missing movie identities") }
+            try check(movies.count == 100 || movies.count == 1)
+            try check(movies.allSatisfy { $0 == .object(["id": .string(movie.id), "code": .string(movie.code)]) })
+            let states = movies.map { _ in ["id": movie.id, "library_id": 7, "state": "in_library"] as [String: Any] }
+            return (200, [:], try JSONSerialization.data(withJSONObject: states))
+        }
+        let states = try await client.movieStates(Array(repeating: movie, count: 101))
+        try check(states.count == 101 && states.first?.libraryId == 7 && states.last?.state == "in_library")
+        MockURLProtocol.handler = { _ in throw Failure("Empty movie list must not request states") }
+        let emptyStates = try await client.movieStates([])
+        try check(emptyStates.isEmpty)
+        MockURLProtocol.handler = { _ in (503, [:], Data(#"{"error":"unavailable"}"#.utf8)) }
+        try await expect(.http(503, "unavailable")) { _ = try await client.subscriptions(kind: "movie") }
+        try await expect(.http(503, "unavailable")) { _ = try await client.subscribeMovie(targetID: movie.id) }
+        try await expect(.http(503, "unavailable")) { _ = try await client.movieStates([movie]) }
+        await client.close()
     }
 
     static func taskDetails() throws {

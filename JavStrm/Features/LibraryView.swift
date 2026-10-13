@@ -62,22 +62,34 @@ struct LibraryView: View {
                 } else {
                     LazyVGrid(columns: columns, spacing: 22) {
                         ForEach(filtered) { movie in
-                            VStack(alignment: .leading, spacing: 8) {
-                                NavigationLink {
-                                    LibraryDetailView(movie: movie)
-                                        .toolbar {
-                                            ToolbarItem(placement: .topBarTrailing) {
-                                                cropButton(for: movie)
-                                            }
+                            NavigationLink {
+                                LibraryDetailView(movie: movie)
+                                    .toolbar {
+                                        ToolbarItem(placement: .topBarTrailing) {
+                                            cropButton(for: movie)
                                         }
-                                } label: {
-                                    MovieCard(code: movie.code, title: movie.title, artwork: movie.artwork,
-                                              rating: movie.rating, artworkLayout: .portrait)
+                                    }
+                            } label: {
+                                MovieCard(code: movie.code, title: movie.title, artwork: movie.artwork,
+                                          rating: movie.rating, artworkLayout: .portrait, showsRating: false)
+                            }
+                            .buttonStyle(.plain)
+                            .overlay(alignment: .top) {
+                                VStack {
+                                    Spacer(minLength: 0)
+                                    HStack {
+                                        Spacer(minLength: 0)
+                                        cropButton(for: movie)
+                                            .labelStyle(.iconOnly)
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.white)
+                                            .frame(width: 36, height: 36)
+                                            .background(.black.opacity(0.6), in: Capsule())
+                                            .buttonStyle(.plain)
+                                            .padding(8)
+                                    }
                                 }
-                                .buttonStyle(.plain)
-                                cropButton(for: movie)
-                                    .buttonStyle(.bordered)
-                                    .font(.caption)
+                                .aspectRatio(ArtworkLayout.portrait.aspectRatio, contentMode: .fit)
                             }
                         }
                     }

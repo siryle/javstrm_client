@@ -84,3 +84,14 @@ bash scripts/verify.sh
 - Tree-sitter 对 23 个 Swift 文件完成辅助语法检查。测试文件中的原始字符串及 `nonisolated(unsafe)` 在内存中做等价语法适配以兼容旧版语法规则，仓库源文件没有为此改写。此检查不能替代 Swift 编译器类型检查。
 - 页面移除项、JSON fixtures、资源 JSON、property list、Scheme / workspace XML、Xcode 工程源文件引用及 `git diff --check` 检查通过。
 - `bash scripts/verify.sh` 因本机缺少 Xcode / Command Line Tools 而无法启动 Swift。新增 Swift 回归用例尚未执行；本次没有生成 IPA，也没有进行 iOS 编译或真实服务登录后的界面验证。
+
+## 发现页卡片状态与默认自动下载变更验证
+
+日期：2026-10-13（Asia/Shanghai）。
+
+- 已参照后台 `web/src/components/movie/movie-card.tsx`、`movie-subscribe-button.tsx` 和 `internal/api/discover.go`：发现页卡片右上角显示订阅、已订阅、已加入离线或已入库；已入库优先。可订阅入口按有磁力资源或未发售作品判断，已有订阅及下载状态继续显示。
+- 卡片订阅按钮与详情导航为独立控件，提交期间禁止重复点击。统一从订阅分页接口读取状态，并通过 `POST /api/discover/movie-states` 每批最多 100 部作品查询当前入库及处理状态；返回详情页、下拉刷新和任务版本变化时刷新，过期请求不会覆盖新状态。
+- 卡片新建作品订阅明确提交 `auto_download=true`，作品详情的自动下载开关默认开启，用户仍可关闭开关再订阅。
+- 新增 Swift 回归用例覆盖状态优先级、未发售作品和无资源作品、当前状态覆盖旧列表状态、超过 100 条订阅的分页、自动下载默认开启及显式关闭、状态请求分批、会话 Cookie、空列表和服务端错误。
+- Tree-sitter 对 23 个 Swift 文件完成辅助语法检查；测试原始 JSON 字符串及 `nonisolated(unsafe)` 在内存中适配旧语法规则，仓库文件未作这些替换。JSON fixtures、资源 JSON、property list、Scheme / workspace XML、Xcode 源文件引用和 `git diff --check` 检查通过。
+- `bash scripts/verify.sh` 因本机缺少 Xcode / Command Line Tools 而无法启动 Swift。新增回归用例尚未执行，本次未进行 iOS 编译、真实界面交互验证或 IPA 构建。

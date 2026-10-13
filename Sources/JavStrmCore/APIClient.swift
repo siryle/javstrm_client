@@ -51,6 +51,41 @@ public actor APIClient {
         }
     }
 
+    public func subscriptions(kind: String) async throws -> [Subscription] {
+        var result: [Subscription] = []
+        var page = 1
+        while true {
+            try Task.checkCancellation()
+            let items = try await list("/api/subscriptions", query: [
+                URLQueryItem(name: "kind", value: kind),
+                URLQueryItem(name: "page", value: String(page)),
+                URLQueryItem(name: "limit", value: "100")
+            ], as: Subscription.self)
+            result += items
+            if items.count < 100 { return result }
+            page += 1
+        }
+    }
+
+    public func subscribeMovie(targetID: String, autoDownload: Bool = true) async throws -> Subscription {
+        try await send("POST", "/api/subscriptions", body: [
+            "kind": .string("movie"), "target_id": .string(targetID), "auto_download": .bool(autoDownload)
+        ])
+    }
+
+    public func movieStates(_ movies: [DiscoverMovie]) async throws -> [DiscoverMovieState] {
+        var result: [DiscoverMovieState] = []
+        for start in stride(from: 0, to: movies.count, by: 100) {
+            try Task.checkCancellation()
+            let batch = movies[start..<min(start + 100, movies.count)]
+            let states: [DiscoverMovieState] = try await send("POST", "/api/discover/movie-states", body: [
+                "movies": .array(batch.map { .object(["id": .string($0.id), "code": .string($0.code)]) })
+            ])
+            result += states
+        }
+        return result
+    }
+
     public func close() {
         token = nil
         session.invalidateAndCancel()
