@@ -12,10 +12,6 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            Section {
-                BrandHeader(eyebrow: "Make it yours", title: "设置", subtitle: "连接你的服务，设定你的习惯。")
-                    .listRowBackground(Color.clear)
-            }.listRowSeparator(.hidden)
             Section("服务器") {
                 LabeledContent("当前地址") {
                     Text(session.serverInput).font(.caption).textSelection(.enabled)

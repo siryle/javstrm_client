@@ -179,6 +179,8 @@ public struct ServerTask: Decodable, Identifiable, Sendable {
     public let createdAt: String
     public let updatedAt: String
     public let code: String?
+    public let origin: String?
+    public let source: [String: JSONValue]?
     public let scan: [String: JSONValue]?
     public let organize: [String: JSONValue]?
     public let strmGenerate: [String: JSONValue]?
@@ -188,6 +190,7 @@ public struct ServerTask: Decodable, Identifiable, Sendable {
     public let emptyDirectory: [String: JSONValue]?
     public let favoriteTransfer: [String: JSONValue]?
     public let strmProbe: [String: JSONValue]?
+    public let syncDelete: [String: JSONValue]?
 
     public var isActive: Bool { status == "running" || status == "queued" }
     public var fraction: Double { min(1, max(0, progress / 100)) }
@@ -196,8 +199,20 @@ public struct ServerTask: Decodable, Identifiable, Sendable {
     }
     public var canTerminate: Bool { canPause }
     public var details: [String: JSONValue] {
-        scan ?? organize ?? strmGenerate ?? strmScrape ?? batch ?? embyActorSync
-        ?? emptyDirectory ?? favoriteTransfer ?? strmProbe ?? [:]
+        // The server includes an empty scan object even for other workflow types.
+        switch type {
+        case "scan": scan ?? [:]
+        case "organize": organize ?? [:]
+        case "strm_generate": strmGenerate ?? [:]
+        case "strm_scrape": strmScrape ?? [:]
+        case "subscription_batch": batch ?? [:]
+        case "emby_actor_sync": embyActorSync ?? [:]
+        case "empty_directory": emptyDirectory ?? [:]
+        case "favorite_transfer": favoriteTransfer ?? [:]
+        case "strm_probe": strmProbe ?? [:]
+        case "sync_delete": syncDelete ?? [:]
+        default: [:]
+        }
     }
     public var title: String {
         switch type {
@@ -210,6 +225,7 @@ public struct ServerTask: Decodable, Identifiable, Sendable {
         case "empty_directory": "空目录清理"
         case "favorite_transfer": "收藏转移"
         case "strm_probe": "播放检查"
+        case "sync_delete": "Emby 同步删除"
         default: type
         }
     }

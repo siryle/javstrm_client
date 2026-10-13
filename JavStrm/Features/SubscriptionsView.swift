@@ -19,8 +19,6 @@ struct SubscriptionsView: View {
     var body: some View {
         List {
             Section {
-                BrandHeader(eyebrow: "Stay in the loop", title: "订阅", subtitle: "让服务端替你持续追踪。")
-                    .listRowBackground(Color.clear)
                 Picker("订阅类型", selection: $kind) {
                     Text("作品").tag("movie")
                     Text("演员").tag("actor")

@@ -23,12 +23,16 @@ struct CoreVerification {
             print("PASS: SSE parser")
             try fixtures()
             print("PASS: backend fixtures")
+            try taskDetails()
+            print("PASS: workflow progress selection, Chinese labels and per-item result fields")
             try artwork()
             try posterCrops()
             print("PASS: library artwork sources and poster crop geometry")
             try await transport()
             try await cropTransport()
             print("PASS: authenticated poster crop requests, empty success responses and server errors")
+            try await taskResultsTransport()
+            print("PASS: workflow result endpoints, pagination, authentication and server errors")
             try await events()
             print("PASS: address validation, SSE parser/transport, 7 backend fixtures, login cookies, auth expiration/isolation, service detection, null lists, image proxy")
         } catch {
@@ -89,6 +93,117 @@ struct CoreVerification {
         try check(!magnets.isEmpty)
         let offline = try decoder.decode(OfflineActivity.self, from: fixture("offline_tasks"))
         try check(offline.tasks?.isEmpty == false)
+    }
+
+    static func workflowTask(type: String, details: [String: JSONValue]) throws -> ServerTask {
+        var payload: [String: JSONValue] = [
+            "id": .number(42), "type": .string(type), "status": .string("running"), "progress": .number(50),
+            "created_at": .string("2026-10-13T12:00:00Z"), "updated_at": .string("2026-10-13T12:01:00Z"),
+            "scan": .object(["stage": .string(""), "movies": .number(0)])
+        ]
+        payload[type == "subscription_batch" ? "batch" : type] = .object(details)
+        return try WireJSON.decoder().decode(ServerTask.self, from: JSONEncoder().encode(payload))
+    }
+
+    static func taskDetails() throws {
+        let types = [
+            "scan", "organize", "strm_generate", "strm_scrape", "subscription_batch",
+            "emby_actor_sync", "empty_directory", "favorite_transfer", "strm_probe", "sync_delete"
+        ]
+        let progress: [String: JSONValue] = [
+            "stage": .string("scraping"), "current_code": .string("ABC-123"),
+            "processed": .number(3), "failed": .number(0), "current_path": .string(""),
+            "extra_paths": .array([.string("/media/one.strm"), .string("/media/two.strm")])
+        ]
+        for type in types {
+            let task = try workflowTask(type: type, details: progress)
+            try check(task.details == progress)
+            try check(task.detailFields.first?.id == "stage" && task.detailFields.first?.value == "刮削中")
+            try check(task.detailFields.first { $0.id == "current_code" }?.label == "当前番号")
+            try check(task.detailFields.first { $0.id == "failed" }?.value == "0")
+            try check(!task.detailFields.contains { $0.id == "current_path" })
+            try check(task.detailFields.first { $0.id == "extra_paths" }?.value == "/media/one.strm\n/media/two.strm")
+            let unsupported = ["scan", "subscription_batch"].contains(type)
+            try check((task.resultsPath == nil) == unsupported)
+        }
+        let scan = try require(WireJSON.decoder().decode([ServerTask].self, from: fixture("tasks")).first)
+        try check(scan.detailFields.first { $0.id == "source" }?.value == "/Movies")
+        let unknown = try workflowTask(type: "future_workflow", details: progress)
+        try check(unknown.details.isEmpty && unknown.resultsPath == nil)
+        let batch = try workflowTask(type: "subscription_batch", details: [
+            "total": .number(1), "failures": .array([
+                .object(["code": .string("ABC-123"), "error": .string("没有可用资源")])
+            ])
+        ])
+        try check(batch.embeddedResults.first?.status == "failed")
+        try check(batch.embeddedResults.first?.error == "没有可用资源")
+        try check(!batch.detailFields.contains { $0.id == "failures" })
+        try check(JSONValue.object(["error": .string("失败")]).detailText == "错误信息：失败")
+        try check(JSONValue.null.detailText.isEmpty)
+
+        let resultPage = try WireJSON.decoder().decode(WorkflowResultsPage.self, from: fixture("workflow_results"))
+        let results = try require(resultPage.items)
+        try check(resultPage.taskId == 42 && resultPage.total == 8 && resultPage.page == 1 && !resultPage.hasMore)
+        try check(results.count == 8)
+        try check(results[0].title == "ABC-123" && results[0].status == "success")
+        try check(results[0].detailFields.map(\.label) == ["源文件", "目标文件"])
+        try check(results[1].detailFields.first?.label == "删除目录")
+        try check(results[2].status == "subtitle_missing" && results[2].error == "字幕下载失败")
+        try check(results[2].detailFields.first?.value == "/media/a.strm\n/media/b.strm")
+        try check(results[2].detailFields.last?.label == "元数据")
+        try check(results[3].detailFields.map(\.label) == ["源文件", "STRM 文件"])
+        try check(results[4].title == "演员" && results[4].detailFields.first?.label == "演员 ID")
+        try check(results[5].detailFields.first?.label == "目录")
+        try check(results[6].detailFields.map(\.label) == ["源文件", "目标 STRM", "115 路径"])
+        try check(results[7].detailFields.map(\.label) == ["STRM 文件", "媒体项 ID", "媒体源 ID"])
+        let generate = try workflowTask(type: "strm_generate", details: [
+            "results": .array([.object(results[3].fields)])
+        ])
+        try check(generate.embeddedResults == [results[3]] && generate.detailFields.isEmpty)
+    }
+
+    static func taskResultsTransport() async throws {
+        let client = try mockClient()
+        await client.adoptBrowserToken(SessionToken(value: "task-session"))
+        var payload = try require(JSONSerialization.jsonObject(with: fixture("workflow_results")) as? [String: Any])
+        payload["page"] = 2
+        payload["total"] = 58
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        for type in [
+            "organize", "strm_scrape", "strm_generate", "emby_actor_sync",
+            "empty_directory", "favorite_transfer", "strm_probe", "sync_delete"
+        ] {
+            let task = try workflowTask(type: type, details: [:])
+            let expectedPath = "/api/tasks/\(type.replacingOccurrences(of: "_", with: "-"))/42/results"
+            MockURLProtocol.handler = { request in
+                try check(request.httpMethod == "GET" && request.url?.path == expectedPath)
+                try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=task-session")
+                let query = URLComponents(url: try require(request.url), resolvingAgainstBaseURL: false)?.queryItems
+                try check(query?.first { $0.name == "page" }?.value == "2")
+                return (200, [:], data)
+            }
+            let result = try await client.taskResults(task, page: 2)
+            try check(result.items?.count == 8 && result.taskId == task.id && result.page == 2 && result.total == 58)
+        }
+        let task = try workflowTask(type: "organize", details: [:])
+        MockURLProtocol.handler = { _ in
+            (200, [:], Data(#"{"task_id":42,"items":null,"total":0,"page":1,"has_more":false}"#.utf8))
+        }
+        let empty = try await client.taskResults(task)
+        try check(empty.items == nil && !empty.hasMore)
+        MockURLProtocol.handler = { _ in
+            (200, [:], Data(#"{"task_id":42,"items":[],"total":51,"page":1,"has_more":true}"#.utf8))
+        }
+        let more = try await client.taskResults(task)
+        try check(more.hasMore && more.page == 1 && more.total == 51)
+        MockURLProtocol.handler = { _ in (404, [:], Data(#"{"error":"任务不存在"}"#.utf8)) }
+        try await expect(.http(404, "任务不存在")) { _ = try await client.taskResults(task) }
+        MockURLProtocol.handler = { _ in (401, [:], Data(#"{"code":"AUTH_REQUIRED","error":"login"}"#.utf8)) }
+        try await expect(.authenticationRequired) { _ = try await client.taskResults(task) }
+        let scan = try workflowTask(type: "scan", details: [:])
+        MockURLProtocol.handler = { _ in throw Failure("Unsupported task must not request a results endpoint") }
+        try await expect(.invalidResponse) { _ = try await client.taskResults(scan) }
+        await client.close()
     }
 
     static func transport() async throws {

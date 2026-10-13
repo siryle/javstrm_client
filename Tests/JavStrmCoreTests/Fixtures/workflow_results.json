@@ -1,0 +1,56 @@
+{
+  "task_id": 42,
+  "items": [
+    {
+      "code": "ABC-123",
+      "status": "success",
+      "source_path": "/source/ABC-123.mp4",
+      "target_path": "/target/ABC-123/ABC-123.mp4"
+    },
+    {
+      "action": "delete_directory",
+      "status": "success",
+      "source_path": "/source/empty"
+    },
+    {
+      "code": "ABC-124",
+      "status": "subtitle_missing",
+      "strm_paths": ["/media/a.strm", "/media/b.strm"],
+      "metadata_paths": ["/media/movie.nfo", "/media/poster.jpg"],
+      "error": "字幕下载失败"
+    },
+    {
+      "status": "skipped",
+      "source_path": "/source/video.mp4",
+      "path": "/media/video.strm"
+    },
+    {
+      "name": "演员",
+      "person_id": "actor-123",
+      "status": "success"
+    },
+    {
+      "directory_path": "/media/empty",
+      "status": "failed",
+      "error": "目录非空"
+    },
+    {
+      "kind": "favorite_transfer",
+      "source_path": "/source/movie.strm",
+      "target_path": "/favorites/movie.strm",
+      "p115_path": "/Movies/movie.mp4",
+      "status": "success"
+    },
+    {
+      "kind": "strm_probe",
+      "source_path": "/media/movie.strm",
+      "item_id": "item-123",
+      "source_id": "source-123",
+      "status": "failed",
+      "error": "播放地址无法访问"
+    }
+  ],
+  "total": 8,
+  "page": 1,
+  "has_more": false
+}

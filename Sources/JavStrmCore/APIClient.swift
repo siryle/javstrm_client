@@ -94,6 +94,11 @@ public actor APIClient {
         try await discard("POST", "/api/library/movies/\(movieID)/crop-poster", body: crop.body)
     }
 
+    public func taskResults(_ task: ServerTask, page: Int = 1) async throws -> WorkflowResultsPage {
+        guard let path = task.resultsPath else { throw APIError.invalidResponse }
+        return try await get(path, query: [URLQueryItem(name: "page", value: String(page))])
+    }
+
     public func imageData(_ source: String) async throws -> Data {
         let request: URLRequest
         if source.hasPrefix("/api/library/artwork/") {

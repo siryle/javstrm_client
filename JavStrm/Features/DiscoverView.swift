@@ -18,8 +18,6 @@ struct DiscoverView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                BrandHeader(eyebrow: "Discover & follow", title: "发现",
-                            subtitle: submittedSearch.isEmpty ? "浏览新作，关注你喜欢的作品。" : "搜索「\(submittedSearch)」")
                 HStack {
                     Menu {
                         Picker("分类", selection: $zone) {

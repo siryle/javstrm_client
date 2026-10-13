@@ -72,3 +72,15 @@ bash scripts/verify.sh
 - 已添加回归用例：横向图及海报选源、空 URL 回退、仅有 poster 时禁止裁切、默认选区、移动和缩放边界、小图与竖图、取整后的像素边界、带会话的裁切请求、空成功响应及服务端错误。
 - 本次通过 Tree-sitter 对 22 个 Swift 文件进行语法检查；Xcode 工程源文件引用、Scheme / workspace XML、资源 JSON 与 property list 检查通过。语法检查不等于 Swift 编译器类型检查。
 - 本次环境未找到 Xcode / Command Line Tools，`bash scripts/verify.sh` 在启动 Swift 时失败。新增 Swift 回归用例尚未执行，iOS 编译、拖动交互和真实服务保存仍需在具备 Xcode 的环境验证；此前的构建记录不代表本次变更已完成编译。
+
+## 页面精简与任务处理详情变更验证
+
+日期：2026-10-13（Asia/Shanghai）。
+
+- 已移除媒体库、发现、订阅、任务和设置页的介绍区，移除媒体库作品及处理数量统计，将媒体库置顶导航标题改为“媒体库”。
+- 已核对本地后端 `internal/tasks/workflow.go`：所有工作流响应都会附带 `scan`，包括其他类型任务。客户端现在按 `type` 选择进度字段，避免空扫描数据覆盖整理、刮削等任务的真实进度。
+- 已参照后台 `web/src/api/task-history.ts`、`web/src/features/task-history/page.tsx` 和 `internal/tasks/history.go`，接入逐项结果接口，显示源文件、目标文件、STRM / 元数据路径、演员、目录、媒体项标识及完整错误信息。详情支持分页、下拉刷新和运行期间每 5 秒刷新已加载页；订阅批量任务显示响应内的失败条目。
+- 新增回归用例覆盖 10 类任务的进度选择（包括非扫描任务携带空 `scan`）、中文标签、路径数组、内嵌失败结果、逐项结果解码、8 类结果接口路由、分页参数、会话 Cookie、空结果和服务端错误。
+- Tree-sitter 对 23 个 Swift 文件完成辅助语法检查。测试文件中的原始字符串及 `nonisolated(unsafe)` 在内存中做等价语法适配以兼容旧版语法规则，仓库源文件没有为此改写。此检查不能替代 Swift 编译器类型检查。
+- 页面移除项、JSON fixtures、资源 JSON、property list、Scheme / workspace XML、Xcode 工程源文件引用及 `git diff --check` 检查通过。
+- `bash scripts/verify.sh` 因本机缺少 Xcode / Command Line Tools 而无法启动 Swift。新增 Swift 回归用例尚未执行；本次没有生成 IPA，也没有进行 iOS 编译或真实服务登录后的界面验证。

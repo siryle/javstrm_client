@@ -10,7 +10,6 @@ struct LibraryView: View {
     @State private var recentOnly = false
     @State private var search = ""
     @State private var page = 0
-    @State private var total = 0
     @State private var hasMore = false
     @State private var loading = false
     @State private var error: String?
@@ -32,12 +31,6 @@ struct LibraryView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                BrandHeader(eyebrow: "Your collection", title: "媒体库",
-                            subtitle: "收纳每一部作品，保持井然有序。")
-                HStack(spacing: 12) {
-                    MetricView(value: total.formatted(), label: "库内作品")
-                    MetricView(value: session.activeCount.formatted(), label: "正在处理")
-                }
                 HStack {
                     Menu {
                         Button("全部目录") { selectedTab = "" }
@@ -98,7 +91,7 @@ struct LibraryView: View {
             .frame(maxWidth: .infinity)
         }
         .background(Palette.canvas)
-        .navigationTitle("JavStrm")
+        .navigationTitle("媒体库")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, prompt: "筛选已加载的番号、标题或演员")
         .toolbar {
@@ -167,7 +160,7 @@ struct LibraryView: View {
         loading = true
         error = nil
         let lastPage = reset && preservingLoadedPages ? max(1, page) : 1
-        if reset && !preservingLoadedPages { movies = []; page = 0; total = 0; hasMore = false }
+        if reset && !preservingLoadedPages { movies = []; page = 0; hasMore = false }
         let nextPage = reset ? 1 : page + 1
         let connection = session.connectionID
         let tab = selectedTab
@@ -194,7 +187,6 @@ struct LibraryView: View {
             let existing = Set(movies.map(\.id))
             movies += refreshed.filter { !existing.contains($0.id) }
             page = result.page
-            total = result.total
             hasMore = result.hasMore
         } catch {
             guard !Task.isCancelled, requestID == request, connection == session.connectionID else { return }

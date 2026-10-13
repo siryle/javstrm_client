@@ -23,9 +23,6 @@ struct TasksView: View {
     var body: some View {
         List {
             Section {
-                BrandHeader(eyebrow: "The engine room", title: "任务",
-                            subtitle: "下载、整理和刮削，一眼掌握进度。")
-                    .listRowBackground(Color.clear)
                 HStack {
                     Circle().fill(session.streamState == .live ? Palette.accent : Palette.gold)
                         .frame(width: 7, height: 7)
@@ -189,6 +186,7 @@ struct TasksView: View {
 
 private struct TaskRow: View {
     let task: ServerTask
+    var errorLineLimit: Int? = 3
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -204,7 +202,8 @@ private struct TaskRow: View {
                 Text("\(Int(task.progress))%").font(.caption.monospacedDigit())
             }
             if let error = task.error, !error.isEmpty {
-                Text(error).font(.caption).foregroundStyle(.red).lineLimit(3)
+                Text(error).font(.caption).foregroundStyle(.red).lineLimit(errorLineLimit)
+                    .textSelection(.enabled)
             }
         }.padding(.vertical, 8)
     }
@@ -216,39 +215,55 @@ private struct TaskDetailView: View {
     let initialTask: ServerTask
     @State private var busy = false
     @State private var confirmStop = false
+    @State private var results: [WorkflowResult] = []
+    @State private var resultPage = 0
+    @State private var resultTotal = 0
+    @State private var hasMoreResults = false
+    @State private var loadingResults = false
+    @State private var resultError: String?
+    @State private var resultRequestID = UUID()
     private var task: ServerTask { session.tasks.first { $0.id == taskID } ?? initialTask }
-    private let labels = [
-        "stage": "当前阶段", "current_path": "当前路径", "current_code": "当前番号",
-        "files": "文件", "files_scanned": "已扫描文件", "directories_scanned": "已扫描目录",
-        "directories_discovered": "发现目录", "video_files": "视频文件", "matched_files": "匹配文件",
-        "unmatched_files": "未匹配文件", "movies": "作品", "removed_files": "移除文件",
-        "removed_movies": "移除作品", "metadata_total": "元数据总数", "metadata_completed": "完成元数据",
-        "moved": "移动", "renamed": "重命名", "skipped": "跳过", "deleted": "删除",
-        "failed": "失败", "generated": "已生成", "matched": "已识别", "written": "已写入",
-        "subtitle_missing": "缺少字幕", "total": "总数", "processed": "已处理",
-        "submitted": "已提交", "imported": "已入库", "waiting": "等待",
-        "scanned": "已扫描", "missing": "缺失", "uploaded": "上传", "removed": "移除",
-        "succeeded": "成功", "directories": "目录"
-    ]
+    private var visibleResults: [WorkflowResult] {
+        task.resultsPath == nil ? task.embeddedResults : results
+    }
 
     var body: some View {
         List {
-            Section { TaskRow(task: task) }
+            Section { TaskRow(task: task, errorLineLimit: nil) }
             if task.canPause {
                 Section {
                     Button(task.paused == true ? "恢复任务" : "暂停任务") { pauseOrResume() }.disabled(busy)
                     Button("终止任务", role: .destructive) { confirmStop = true }.disabled(busy)
                 }
             }
-            Section("处理详情") {
-                ForEach(task.details.keys.sorted(), id: \.self) { key in
-                    let value = task.details[key]?.text ?? ""
-                    if !value.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(labels[key] ?? key).font(.caption).foregroundStyle(.secondary)
-                            Text(value).font(.subheadline).textSelection(.enabled)
-                        }.padding(.vertical, 2)
+            Section("处理进度") {
+                if task.detailFields.isEmpty {
+                    Text(task.isActive ? "任务等待服务端报告处理进度。" : "服务端未提供处理进度。")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(task.detailFields) { field in
+                    TaskDetailFieldView(field: field)
+                }
+            }
+            if task.resultsPath != nil || !visibleResults.isEmpty {
+                Section {
+                    if let resultError {
+                        ErrorPanel(message: resultError) { Task { await loadResults(reset: true) } }
                     }
+                    if loadingResults && results.isEmpty {
+                        ProgressView("正在读取处理详情")
+                    } else if visibleResults.isEmpty && resultError == nil {
+                        Text(task.isActive ? "尚未产生处理结果，完成的条目会自动显示。" : "服务端没有保存逐项处理结果。")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    ForEach(Array(visibleResults.enumerated()), id: \.offset) { _, result in
+                        WorkflowResultRow(result: result)
+                    }
+                    if hasMoreResults {
+                        LoadMoreButton(isLoading: loadingResults) { Task { await loadResults(reset: false) } }
+                    }
+                } header: {
+                    Text(resultTotal > 0 ? "处理详情（\(resultTotal)）" : "处理详情")
                 }
             }
             Section("时间") {
@@ -257,12 +272,63 @@ private struct TaskDetailView: View {
             }.font(.caption)
         }
         .navigationTitle(task.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: session.connectionID) {
+            guard task.resultsPath != nil else { return }
+            while !Task.isCancelled {
+                await loadResults(reset: true)
+                if !task.isActive && !loadingResults { return }
+                do { try await Task.sleep(for: .seconds(5)) }
+                catch { return }
+            }
+        }
+        .refreshable {
+            await session.refreshTasks()
+            await loadResults(reset: true)
+        }
         .confirmationDialog("终止当前任务？", isPresented: $confirmStop, titleVisibility: .visible) {
             Button("终止任务", role: .destructive) { act("terminate") }
         } message: { Text("已处理的文件会保留，任务后续处理将停止。") }
     }
 
     private func pauseOrResume() { act(task.paused == true ? "resume" : "pause") }
+
+    private func loadResults(reset: Bool) async {
+        guard let api = session.client, task.resultsPath != nil, !loadingResults else { return }
+        let request = UUID()
+        resultRequestID = request
+        let connection = session.connectionID
+        let currentTask = task
+        let nextPage = reset ? 1 : resultPage + 1
+        let lastPage = reset ? max(1, resultPage) : nextPage
+        loadingResults = true
+        resultError = nil
+        defer { if resultRequestID == request { loadingResults = false } }
+        do {
+            var loaded: [WorkflowResult] = []
+            var last: WorkflowResultsPage?
+            // Refresh every loaded page so growing results do not erase older visible entries.
+            for page in nextPage...lastPage {
+                let response = try await api.taskResults(currentTask, page: page)
+                guard !Task.isCancelled, connection == session.connectionID,
+                      resultRequestID == request else { return }
+                guard response.taskId == taskID else { throw APIError.invalidResponse }
+                loaded += response.items ?? []
+                last = response
+                if !response.hasMore { break }
+            }
+            guard let last else { return }
+            results = reset ? loaded : results + loaded
+            resultPage = last.page
+            resultTotal = last.total
+            hasMoreResults = last.hasMore
+        } catch {
+            guard !Task.isCancelled, connection == session.connectionID,
+                  resultRequestID == request else { return }
+            resultError = session.describe(error)
+            session.handle(error)
+        }
+    }
 
     private func act(_ action: String) {
         let id = taskID
@@ -273,5 +339,41 @@ private struct TaskDetailView: View {
             }
             busy = false
         }
+    }
+}
+
+private struct TaskDetailFieldView: View {
+    let field: TaskDetailField
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(field.label).font(.caption).foregroundStyle(.secondary)
+            Text(field.value).font(.subheadline).textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 2)
+    }
+}
+
+private struct WorkflowResultRow: View {
+    let result: WorkflowResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                if !result.title.isEmpty {
+                    Text(result.title).font(.subheadline.weight(.semibold)).textSelection(.enabled)
+                }
+                Spacer()
+                StatusPill(value: result.status)
+            }
+            ForEach(result.detailFields) { field in
+                TaskDetailFieldView(field: field)
+            }
+            if !result.error.isEmpty {
+                Text(result.error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+            }
+        }
+        .padding(.vertical, 8)
     }
 }
