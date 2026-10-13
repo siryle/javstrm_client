@@ -57,7 +57,7 @@ struct DiscoverView: View {
                 } else {
                     LazyVGrid(columns: columns, spacing: 22) {
                         ForEach(movies) { movie in
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 0) {
                                 NavigationLink {
                                     MovieDetailView(movieID: movie.id, initialMovie: movie)
                                         .onDisappear { Task { await refreshActions() } }
@@ -66,6 +66,9 @@ struct DiscoverView: View {
                                                     rating: movie.rating, artworkLayout: .landscape)
                                 }
                                 .buttonStyle(.plain)
+                                Rectangle()
+                                    .fill(Palette.cardBorder)
+                                    .frame(height: 1)
                                 HStack(alignment: .top, spacing: 8) {
                                     NavigationLink {
                                         MovieDetailView(movieID: movie.id, initialMovie: movie)
@@ -85,6 +88,14 @@ struct DiscoverView: View {
                                     }
                                     .fixedSize(horizontal: true, vertical: false)
                                 }
+                                .padding(14)
+                            }
+                            .background(Palette.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .strokeBorder(Palette.cardBorder, lineWidth: 1)
+                                    .allowsHitTesting(false)
                             }
                         }
                     }

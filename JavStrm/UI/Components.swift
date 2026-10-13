@@ -7,6 +7,11 @@ enum Palette {
     static let gold = Color(red: 0.77, green: 0.52, blue: 0.22)
     static let canvas = Color(uiColor: .systemGroupedBackground)
     static let card = Color(uiColor: .secondarySystemGroupedBackground)
+    static let cardBorder = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 53.0 / 255, green: 67.0 / 255, blue: 56.0 / 255, alpha: 1)
+            : UIColor(red: 223.0 / 255, green: 227.0 / 255, blue: 217.0 / 255, alpha: 1)
+    })
 }
 
 struct BrandHeader: View {
@@ -105,6 +110,7 @@ struct PosterView: View {
     let source: String
     let code: String
     let layout: ArtworkLayout
+    var cornerRadius: CGFloat = 12
     @State private var image: UIImage?
     @State private var failed = false
 
@@ -145,7 +151,7 @@ struct PosterView: View {
             }
         }
         .aspectRatio(layout.aspectRatio, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .accessibilityLabel(hideArtwork ? "封面已隐藏，\(code)" : "\(code) 封面")
         .task(id: "\(session.connectionID)|\(source)|\(hideArtwork)") {
             image = nil
@@ -173,7 +179,7 @@ struct MovieCardPoster: View {
     let artworkLayout: ArtworkLayout
 
     var body: some View {
-        PosterView(source: artwork, code: code, layout: artworkLayout)
+        PosterView(source: artwork, code: code, layout: artworkLayout, cornerRadius: 0)
             .overlay(alignment: .bottomTrailing) {
                 if rating > 0 {
                     Label(rating.formatted(.number.precision(.fractionLength(1))), systemImage: "star.fill")
