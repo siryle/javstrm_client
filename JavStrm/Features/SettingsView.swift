@@ -47,9 +47,7 @@ struct SettingsView: View {
                     Label("网盘尚未连接", systemImage: "icloud.slash").foregroundStyle(.secondary)
                 }
                 if let panError { Text(panError).font(.caption).foregroundStyle(.red) }
-                Button("登录网盘与配置目录") {
-                    portal = .init(title: "115 网盘设置", path: "/settings", query: [.init(name: "tab", value: "pan")])
-                }
+                NavigationLink("登录网盘与配置目录") { PanSettingsView() }
             }
             Section("管理") {
                 NavigationLink { FileBrowserView(source: "local", directory: "/") } label: {

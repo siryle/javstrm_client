@@ -36,6 +36,9 @@ struct CoreVerification {
             print("PASS: authenticated poster crop requests, empty success responses and server errors")
             try await taskResultsTransport()
             print("PASS: workflow result endpoints, pagination, authentication and server errors")
+            try panLoginModels()
+            try await panSettingsTransport()
+            print("PASS: native pan QR sessions, scan methods, login states, directory settings and auth isolation")
             try await events()
             print("PASS: address validation, SSE parser/transport, 7 backend fixtures, login cookies, auth expiration/isolation, service detection, null lists, image proxy")
         } catch {
@@ -366,6 +369,96 @@ struct CoreVerification {
         await client.adoptBrowserToken(nil)
         let loggedOut = await client.currentToken()
         try check(loggedOut == nil)
+        await client.close()
+    }
+
+    static func panLoginModels() throws {
+        let decoder = WireJSON.decoder()
+        let login = try decoder.decode(PanLoginSession.self, from: Data(
+            #"{"id":"qr-session","qr_code":"data:image/png;base64,iVBORw0KGgo=","client_type":"115ios"}"#.utf8))
+        try check(login.id == "qr-session" && login.clientType == "115ios")
+        try check(login.qrCodeData == Data([137, 80, 78, 71, 13, 10, 26, 10]))
+        for code in ["data:image/png;base64,???", "data:image/png;base64,", "https://example.test/qr.png"] {
+            let data = try JSONEncoder().encode(["id": "qr-session", "qr_code": code])
+            try check(decoder.decode(PanLoginSession.self, from: data).qrCodeData == nil)
+        }
+        for raw in ["waiting", "scanned", "authorized", "expired", "canceled"] {
+            let data = try JSONEncoder().encode(["state": raw])
+            let status = try decoder.decode(PanLoginStatus.self, from: data)
+            try check(status.state.rawValue == raw)
+            try check(status.state.isPending == (raw == "waiting" || raw == "scanned"))
+        }
+        let root = PanDirectory(id: "0", name: "根目录", path: "/")
+        try check(root.id == "0" && root.path == "/")
+    }
+
+    static func panSettingsTransport() async throws {
+        let client = try mockClient()
+        await client.adoptBrowserToken(SessionToken(value: "pan-settings-token"))
+        for method in PanScanMethod.allCases {
+            MockURLProtocol.handler = { request in
+                try check(request.httpMethod == "POST" && request.url?.path == "/api/pan/cookie/login")
+                try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=pan-settings-token")
+                let body = try JSONDecoder().decode([String: JSONValue].self, from: requestBody(request))
+                try check(body == ["client_type": .string(method.rawValue)])
+                return (200, [:], Data(#"{"id":"qr-session","qr_code":"data:image/png;base64,iVBORw0KGgo="}"#.utf8))
+            }
+            let login = try await client.beginPanLogin(method: method)
+            try check(login.id == "qr-session" && login.qrCodeData != nil)
+        }
+        for state in ["waiting", "scanned", "authorized", "expired", "canceled"] {
+            MockURLProtocol.handler = { request in
+                try check(request.httpMethod == "GET" && request.url?.path == "/api/pan/cookie/login/qr-session")
+                try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=pan-settings-token")
+                return (200, [:], try JSONEncoder().encode(["state": state]))
+            }
+            let result = try await client.panLoginStatus(id: "qr-session")
+            try check(result.rawValue == state)
+        }
+        MockURLProtocol.handler = { request in
+            try check(request.url?.absoluteString.contains("id%2Fwith%3Freserved") == true)
+            return (200, [:], Data(#"{"state":"waiting"}"#.utf8))
+        }
+        _ = try await client.panLoginStatus(id: "id/with?reserved")
+        for kind in PanDirectoryKind.allCases {
+            let endpoint = kind == .download ? "/api/pan/directory" : "/api/pan/organize-directory"
+            for id in ["42", "0"] {
+                MockURLProtocol.handler = { request in
+                    try check(request.httpMethod == "PUT" && request.url?.path == endpoint)
+                    try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=pan-settings-token")
+                    let body = try JSONDecoder().decode([String: JSONValue].self, from: requestBody(request))
+                    try check(body == ["id": .string(id)])
+                    return (200, [:], try JSONEncoder().encode(["id": id, "name": "Movies", "path": "/Movies"]))
+                }
+                let directory = try await client.selectPanDirectory(id: id, kind: kind)
+                try check(directory.id == id && directory.path == "/Movies")
+            }
+            MockURLProtocol.handler = { request in
+                try check(request.httpMethod == "DELETE" && request.url?.path == endpoint)
+                try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=pan-settings-token")
+                return (200, [:], Data("null".utf8))
+            }
+            try await client.clearPanDirectory(kind: kind)
+        }
+        MockURLProtocol.handler = { request in
+            try check(request.httpMethod == "DELETE" && request.url?.path == "/api/pan/cookie")
+            return (200, [:], Data(#"{"connected":false,"last_event_id":0}"#.utf8))
+        }
+        try await client.logoutPan()
+        let appToken = await client.currentToken()
+        try check(appToken?.value == "pan-settings-token")
+        MockURLProtocol.handler = { _ in (401, [:], Data(#"{"error":"115 Cookie expired"}"#.utf8)) }
+        try await expect(.http(401, "115 Cookie expired")) {
+            _ = try await client.selectPanDirectory(id: "42", kind: .download)
+        }
+        let preserved = await client.currentToken()
+        try check(preserved?.value == "pan-settings-token")
+        MockURLProtocol.handler = { _ in (500, [:], Data(#"{"error":"save failed"}"#.utf8)) }
+        try await expect(.http(500, "save failed")) { try await client.clearPanDirectory(kind: .organize) }
+        MockURLProtocol.handler = { _ in (401, [:], Data(#"{"code":"AUTH_REQUIRED","error":"login"}"#.utf8)) }
+        try await expect(.authenticationRequired) { _ = try await client.panLoginStatus(id: "qr-session") }
+        let expired = await client.currentToken()
+        try check(expired == nil)
         await client.close()
     }
 

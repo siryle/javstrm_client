@@ -60,6 +60,7 @@ bash scripts/verify.sh
 | 工具 | `POST /api/organize`、`POST /api/local/organize`、`POST /api/strm-scrape`、`POST /api/quick-strm/generate` |
 | 快速 STRM 任务 | `GET /api/quick-strm/jobs`、`POST /api/quick-strm/jobs/:id/cancel` |
 | 账号与文件 | `GET /api/pan/account`、`GET /api/pan/files`、`GET /api/files/local` |
+| 原生网盘设置 | `POST /api/pan/cookie/login`、`GET /api/pan/cookie/login/:id`、`DELETE /api/pan/cookie`、`PUT / DELETE /api/pan/directory`、`PUT / DELETE /api/pan/organize-directory` |
 | 日志与图片 | `GET /api/logs`、`GET /api/image`、`GET /api/library/artwork/:key` |
 | 高级管理页面 | `/settings`、`/tools`、`/files`、`/tasks` |
 
@@ -106,3 +107,14 @@ bash scripts/verify.sh
 - 更新回归用例覆盖无磁力资源的已发售、未发售、未知发行状态、异常订阅及磁力字段为 null 或缺失。
 - 使用现有 Tree-sitter 对 23 个 Swift 文件完成辅助语法检查，测试原始 JSON 字符串及 `nonisolated(unsafe)` 仅在内存中适配语法规则。JSON fixtures、资源 JSON、property list、Scheme / workspace XML、Xcode 源文件引用及 `git diff --check` 检查通过。
 - 本机仍缺少 Xcode / Command Line Tools，Swift 回归用例及 iOS 编译未执行；未安装依赖、运行浏览器测试或构建 IPA。
+
+## 原生网盘登录与目录配置变更验证
+
+日期：2026-10-13（Asia/Shanghai）。
+
+- 已核对本地后端 `web/src/api/pan.ts`、`internal/api/pan_life.go`、`internal/panlife/service.go` 和 `internal/drive/mount.go`：二维码为 PNG base64 数据，扫码方式通过 `client_type` 提交，登录状态分为 waiting / scanned / authorized / expired / canceled；下载目录与整理目录分别保存和清除。
+- 设置中的「登录网盘与配置目录」改为原生导航页面，提供账号与容量、二维码扫码登录、两类目录选择 / 清除及退出网盘登录。目录选择复用文件浏览器，保留分页、逐层导航和根目录入口，保存失败在选择页显示错误并允许重试。
+- 扫码轮询使用页面生命周期管理，每次查询后间隔 1.5 秒，连续 5 次失败后停止并提供重新获取入口；离开页面或进入后台时取消查询，返回前台继续原二维码。扫码方式切换和重新获取通过请求标识隔离旧响应，服务器切换通过连接标识隔离旧响应。
+- 新增 Swift 回归用例覆盖二维码数据解码与无效数据、全部扫码方式、五种登录状态、登录会话路径编码、两类目录保存与清除（包含根目录）、网盘退出保留 App Token、115 业务 401 与 App `AUTH_REQUIRED` 的区别及保存错误。
+- 使用已有 Tree-sitter 对 26 个 Swift 文件完成辅助语法检查；测试原始 JSON 字符串及 `nonisolated(unsafe)` 仅在内存中适配旧语法规则。工程源文件引用及构建阶段、Scheme / workspace XML、资源 JSON、固定接口样本、property list 和 `git diff --check` 检查通过。
+- `bash scripts/verify.sh` 因本机缺少 Xcode / Command Line Tools 而无法启动 Swift；新增回归用例和 iOS 编译尚未执行。未安装依赖、运行浏览器测试、修改真实服务器网盘配置或构建 IPA。真实扫码授权、目录写入及 iPhone / iPad 交互仍需用户验收，具体项目见 `docs/ACCEPTANCE.md`。
