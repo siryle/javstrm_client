@@ -57,7 +57,7 @@ struct DiscoverView: View {
                 } else {
                     LazyVGrid(columns: columns, spacing: 22) {
                         ForEach(movies) { movie in
-                            ZStack(alignment: .topTrailing) {
+                            ZStack(alignment: .bottomTrailing) {
                                 NavigationLink {
                                     MovieDetailView(movieID: movie.id, initialMovie: movie)
                                         .onDisappear { Task { await refreshActions() } }
@@ -66,6 +66,7 @@ struct DiscoverView: View {
                                               rating: movie.rating, artworkLayout: .landscape)
                                 }
                                 .buttonStyle(.plain)
+                                .padding(.bottom, 52)
                                 let action = movie.cardAction(
                                     subscriptionStatus: subscriptions[movie.id]?.status,
                                     currentState: movieStates[movie.id]?.state
