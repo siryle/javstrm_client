@@ -29,54 +29,6 @@ struct BrandHeader: View {
     }
 }
 
-struct InlineSearchField: View {
-    @Binding var text: String
-    let prompt: String
-    var onSearch: (() -> Void)?
-    @FocusState private var isFocused: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField(prompt, text: $text)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
-                .focused($isFocused)
-                .onSubmit { submit() }
-                .frame(minHeight: 44)
-                .accessibilityLabel(prompt)
-            if !text.isEmpty {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("清空搜索")
-            }
-            if onSearch != nil {
-                Button("搜索") { submit() }
-                    .buttonStyle(.borderless)
-                    .font(.subheadline.weight(.semibold))
-                    .frame(minWidth: 44, minHeight: 44)
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 4)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 14))
-    }
-
-    private func submit() {
-        isFocused = false
-        onSearch?()
-    }
-}
-
 struct ErrorPanel: View {
     let message: String
     var retry: (() -> Void)?

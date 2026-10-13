@@ -41,7 +41,6 @@ struct LogsView: View {
             }
         }
         .navigationTitle("系统日志")
-        .toolbar(.visible, for: .navigationBar)
         .searchable(text: $search, prompt: "筛选日志")
         .task(id: component) { await load() }
         .refreshable { await load() }

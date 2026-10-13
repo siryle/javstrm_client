@@ -38,7 +38,6 @@ struct FileBrowserView: View {
         }
         .navigationTitle(source == "pan" ? "115 网盘" : "本地文件")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
         .task { await load(reset: true) }
         .refreshable { await load(reset: true) }
         .sheet(item: $selectedFile) { file in

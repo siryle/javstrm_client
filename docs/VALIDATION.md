@@ -19,7 +19,6 @@ Commit: 00c574eedc7613150a98d3e93fafe61a28ade34a
 - SSE：注释、事件类型、多行数据、空行边界、数据限制、URLSession 字节流接收。解析采用字节分隔，避免本机 AsyncLineSequence 丢弃空行而不发出事件的问题。
 - `AppSession.swift` 与 `CredentialStore.swift` 使用真实 Foundation、Observation 和 Security 框架完成 Swift 6 严格类型检查。
 - App 全部 Swift 文件完成语法解析。
-- 移除五个主页面固定顶部导航栏、迁移媒体库和任务操作、加入页内搜索后，使用本机 iPhoneOS 27.0 SDK 对全部 App Swift 源码完成 Swift 6、iOS 17 arm64 类型检查；尚未验证实际布局和导航切换。
 - 使用 macOS SDK 对临时转换的平台对应 SwiftUI / WebKit 代码进行辅助类型检查。只替换 iOS 专用修饰符、图片 / 视图类型以及 UIKit 桥接；真实工程文件不作这些替换。该检查不能代替 iOS SDK 编译。
 - Info.plist、PrivacyInfo.xcprivacy、project.pbxproj 通过 `plutil` 检查。
 - Scheme / workspace XML、资源 JSON、工程 Swift 源文件引用完整性检查。

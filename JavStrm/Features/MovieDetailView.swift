@@ -113,7 +113,6 @@ struct MovieDetailView: View {
         .background(Palette.canvas)
         .navigationTitle(displayed?.code ?? "作品资料")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
         .task {
             async let detail: Void = load()
             async let subscription: Void = loadSubscription()

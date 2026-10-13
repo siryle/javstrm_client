@@ -20,9 +20,6 @@ struct DiscoverView: View {
             VStack(alignment: .leading, spacing: 22) {
                 BrandHeader(eyebrow: "Discover & follow", title: "发现",
                             subtitle: submittedSearch.isEmpty ? "浏览新作，关注你喜欢的作品。" : "搜索「\(submittedSearch)」")
-                InlineSearchField(text: $search, prompt: "搜索番号、作品或演员") {
-                    submittedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
                 HStack {
                     Menu {
                         Picker("分类", selection: $zone) {
@@ -72,7 +69,9 @@ struct DiscoverView: View {
         }
         .background(Palette.canvas)
         .navigationTitle("发现")
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $search, prompt: "搜索番号、作品或演员")
+        .onSubmit(of: .search) { submittedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines) }
         .onChange(of: search) { _, value in if value.isEmpty { submittedSearch = "" } }
         .task(id: "\(zone)|\(sort)|\(submittedSearch)") { await load(reset: true) }
         .refreshable { await load(reset: true) }

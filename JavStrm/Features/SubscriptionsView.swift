@@ -68,7 +68,7 @@ struct SubscriptionsView: View {
             }
         }
         .navigationTitle("订阅")
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
         .task(id: kind) { await load(reset: true) }
         .onChange(of: session.revisions?.monitor) { old, new in
             if old != nil, old != new { Task { await load(reset: true) } }
@@ -199,7 +199,6 @@ private struct ActorFeedView: View {
             if hasMore { LoadMoreButton(isLoading: loading) { Task { await load(reset: false) } } }
         }
         .navigationTitle(subscription.title)
-        .toolbar(.visible, for: .navigationBar)
         .task { await load(reset: true) }
         .refreshable { await load(reset: true) }
     }
