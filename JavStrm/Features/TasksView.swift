@@ -26,6 +26,7 @@ struct TasksView: View {
                 BrandHeader(eyebrow: "The engine room", title: "任务",
                             subtitle: "下载、整理和刮削，一眼掌握进度。")
                     .listRowBackground(Color.clear)
+                taskTools
                 HStack {
                     Circle().fill(session.streamState == .live ? Palette.accent : Palette.gold)
                         .frame(width: 7, height: 7)
@@ -128,38 +129,41 @@ struct TasksView: View {
             }
         }
         .navigationTitle("任务")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button("115 媒体整理") {
-                        confirm(title: "启动 115 媒体整理", path: "/api/organize",
-                                description: "使用服务端已保存的源目录、目标目录及整理规则。")
-                    }
-                    Button("本地媒体整理") {
-                        confirm(title: "启动本地媒体整理", path: "/api/local/organize",
-                                description: "使用服务端已保存的本地媒体整理配置。")
-                    }
-                    Button("STRM 元数据刮削") {
-                        confirm(title: "启动 STRM 刮削", path: "/api/strm-scrape",
-                                description: "使用服务端已保存的刮削目录和设置。")
-                    }
-                    Button("全部 STRM 快速生成") {
-                        confirm(title: "启动 STRM 快速生成", path: "/api/quick-strm/generate",
-                                body: ["id": .string("")],
-                                description: "执行服务端已配置的全部生成组，使用各组的覆盖及清理规则。")
-                    }
-                    Button("配置工具") { portal = .init(title: "服务端工具", path: "/tools") }
-                } label: { Image(systemName: "plus.circle") }
-                .disabled(busy)
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .refreshable { await session.refreshTasks() }
         .confirmationDialog(pendingAction?.title ?? "执行操作", isPresented: $showConfirmation, titleVisibility: .visible) {
             Button(pendingAction?.title ?? "确认", role: pendingAction?.path.contains("terminate") == true
                    || pendingAction?.path.contains("cancel") == true ? .destructive : nil) { execute() }
         } message: { Text(pendingAction?.description ?? "") }
         .sheet(item: $portal) { WebPortalView(destination: $0) }
+    }
+
+    private var taskTools: some View {
+        Menu {
+            Button("115 媒体整理") {
+                confirm(title: "启动 115 媒体整理", path: "/api/organize",
+                        description: "使用服务端已保存的源目录、目标目录及整理规则。")
+            }
+            Button("本地媒体整理") {
+                confirm(title: "启动本地媒体整理", path: "/api/local/organize",
+                        description: "使用服务端已保存的本地媒体整理配置。")
+            }
+            Button("STRM 元数据刮削") {
+                confirm(title: "启动 STRM 刮削", path: "/api/strm-scrape",
+                        description: "使用服务端已保存的刮削目录和设置。")
+            }
+            Button("全部 STRM 快速生成") {
+                confirm(title: "启动 STRM 快速生成", path: "/api/quick-strm/generate",
+                        body: ["id": .string("")],
+                        description: "执行服务端已配置的全部生成组，使用各组的覆盖及清理规则。")
+            }
+            Button("配置工具") { portal = .init(title: "服务端工具", path: "/tools") }
+        } label: {
+            Label("整理与生成工具", systemImage: "plus.circle")
+                .padding(.vertical, 6)
+        }
+        .buttonStyle(.bordered)
+        .disabled(busy)
     }
 
     private func matches(_ status: String) -> Bool {
@@ -257,6 +261,7 @@ private struct TaskDetailView: View {
             }.font(.caption)
         }
         .navigationTitle(task.title)
+        .toolbar(.visible, for: .navigationBar)
         .confirmationDialog("终止当前任务？", isPresented: $confirmStop, titleVisibility: .visible) {
             Button("终止任务", role: .destructive) { act("terminate") }
         } message: { Text("已处理的文件会保留，任务后续处理将停止。") }

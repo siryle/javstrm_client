@@ -34,6 +34,25 @@ struct LibraryView: View {
                 BrandHeader(eyebrow: "Your collection", title: "媒体库",
                             subtitle: "收纳每一部作品，保持井然有序。")
                 HStack(spacing: 12) {
+                    Button {
+                        hideArtwork.toggle()
+                    } label: {
+                        Label(hideArtwork ? "显示封面" : "隐藏封面",
+                              systemImage: hideArtwork ? "eye.slash" : "eye")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                    }
+                    Button { confirmScan = true } label: {
+                        Label(scanning ? "正在提交" : "扫描媒体库",
+                              systemImage: "arrow.triangle.2.circlepath")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                    }
+                    .disabled(scanning)
+                }
+                .buttonStyle(.bordered)
+                InlineSearchField(text: $search, prompt: "筛选已加载的番号、标题或演员")
+                HStack(spacing: 12) {
                     MetricView(value: total.formatted(), label: "库内作品")
                     MetricView(value: session.activeCount.formatted(), label: "正在处理")
                 }
@@ -86,22 +105,8 @@ struct LibraryView: View {
             .frame(maxWidth: .infinity)
         }
         .background(Palette.canvas)
-        .navigationTitle("JavStrm")
-        .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $search, prompt: "筛选已加载的番号、标题或演员")
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    hideArtwork.toggle()
-                } label: {
-                    Image(systemName: hideArtwork ? "eye.slash" : "eye")
-                }
-                .accessibilityLabel(hideArtwork ? "显示封面" : "隐藏封面")
-                Button { confirmScan = true } label: { Image(systemName: "arrow.triangle.2.circlepath") }
-                    .disabled(scanning)
-                    .accessibilityLabel("扫描媒体库")
-            }
-        }
+        .navigationTitle("媒体库")
+        .toolbar(.hidden, for: .navigationBar)
         .confirmationDialog("扫描媒体库", isPresented: $confirmScan, titleVisibility: .visible) {
             Button("开始扫描") {
                 let tab = selectedTab
@@ -199,6 +204,7 @@ private struct LibraryDetailView: View {
         .background(Palette.canvas)
         .navigationTitle(movie.code)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 
     private func metadata(_ title: String, _ value: String) -> some View {

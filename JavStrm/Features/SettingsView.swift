@@ -79,7 +79,7 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("设置")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .task { await loadPan() }
         .refreshable { await loadPan() }
         .sheet(item: $portal, onDismiss: { Task { await loadPan() } }) { WebPortalView(destination: $0) }
