@@ -39,33 +39,23 @@ struct SettingsView: View {
                     }
                     LabeledContent("下载目录", value: pan.directory?.name ?? "未设置")
                     LabeledContent("整理目录", value: pan.organizeDirectory?.name ?? "未设置")
-                    NavigationLink {
-                        FileBrowserView(source: "pan", directory: "0")
-                    } label: { Label("浏览网盘文件", systemImage: "externaldrive") }
                 } else {
                     Label("网盘尚未连接", systemImage: "icloud.slash").foregroundStyle(.secondary)
                 }
                 if let panError { Text(panError).font(.caption).foregroundStyle(.red) }
-                NavigationLink("登录网盘与配置目录") { PanSettingsView() }
             }
             Section("管理") {
-                NavigationLink { FileBrowserView(source: "local", directory: "/") } label: {
-                    Label("浏览服务端本地文件", systemImage: "folder")
-                }
                 NavigationLink { LogsView() } label: { Label("系统日志", systemImage: "text.alignleft") }
-                NavigationLink { ServerToolsView() } label: {
-                    Label("STRM 与 Emby 工具", systemImage: "wrench.and.screwdriver")
-                }
                 NavigationLink { ServerSettingsView() } label: {
                     Label("服务端完整设置", systemImage: "slider.horizontal.3")
                 }
                 NavigationLink { FileManagementView() } label: {
-                    Label("文件复制、移动与管理", systemImage: "doc.on.doc")
+                    Label("文件管理", systemImage: "folder")
                 }
             }
             Section("关于") {
                 LabeledContent("应用", value: "JavStrm")
-                LabeledContent("版本", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
+                LabeledContent("版本", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.0")
                 Text("原生 iOS 客户端 · iPhone / iPad")
                     .font(.footnote).foregroundStyle(.secondary)
                 Button("退出登录", role: .destructive) { confirmLogout = true }

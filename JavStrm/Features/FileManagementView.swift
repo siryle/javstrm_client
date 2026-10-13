@@ -18,7 +18,7 @@ struct FileManagementView: View {
             }
             if let error { ErrorPanel(message: error) { Task { await load() } } }
         }
-        .navigationTitle("文件复制、移动与管理")
+        .navigationTitle("文件管理")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: session.connectionID) { await load() }
         .refreshable { await load() }

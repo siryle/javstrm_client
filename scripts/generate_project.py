@@ -81,7 +81,7 @@ def generate():
             "GENERATE_INFOPLIST_FILE": "NO",
             "INFOPLIST_FILE": "JavStrm/Resources/Info.plist",
             "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks",
-            "MARKETING_VERSION": "1.0.0",
+            "MARKETING_VERSION": "1.1.0",
             "PRODUCT_BUNDLE_IDENTIFIER": "com.sean.javstrm",
             "PRODUCT_NAME": "$(TARGET_NAME)",
             "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator",

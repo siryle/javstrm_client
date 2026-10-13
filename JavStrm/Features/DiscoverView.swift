@@ -188,19 +188,15 @@ struct DiscoverView: View {
                 actionRequestID = UUID()
                 subscriptions[movie.id] = item
                 actionsReady = true
-                session.notice = .init(message: "作品已订阅，正在检查资源。")
                 let checked = try await api.checkSubscription(id: item.id)
                 guard connection == session.connectionID, !Task.isCancelled else { return }
                 actionRequestID = UUID()
                 switch checked {
                 case .updated(let updated):
                     subscriptions[movie.id] = updated
-                    session.notice = .init(message: updated.status == "added"
-                                           ? "已加入离线下载。" : "已订阅，暂无符合偏好的资源，后续会自动检查。")
                 case .imported:
                     subscriptions[movie.id] = nil
                     movieStates[movie.id] = .init(id: movie.id, state: "in_library")
-                    session.notice = .init(message: "作品已入库。")
                 }
                 await session.refreshTasks()
             } catch {
