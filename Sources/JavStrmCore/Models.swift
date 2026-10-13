@@ -144,15 +144,14 @@ public struct DiscoverMovie: Decodable, Identifiable, Sendable {
     public let zone: String?
     public var artwork: String { cover ?? thumbnail ?? "" }
 
-    public func cardAction(subscriptionStatus: String?, currentState: String? = nil) -> DiscoverMovieCardAction? {
+    public func cardAction(subscriptionStatus: String?, currentState: String? = nil) -> DiscoverMovieCardAction {
         let state = currentState ?? self.state
         if state == "in_library" { return .inLibrary }
         if state == "saving" || state == "processing" || subscriptionStatus == "added" {
             return .addedOffline
         }
         if subscriptionStatus == "waiting" { return .subscribed }
-        if (magnetsCount ?? 0) > 0 || releaseStatus == "upcoming" { return .subscribe }
-        return nil
+        return .subscribe
     }
 }
 

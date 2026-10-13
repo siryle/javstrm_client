@@ -62,34 +62,23 @@ struct LibraryView: View {
                 } else {
                     LazyVGrid(columns: columns, spacing: 22) {
                         ForEach(filtered) { movie in
-                            NavigationLink {
-                                LibraryDetailView(movie: movie)
-                                    .toolbar {
-                                        ToolbarItem(placement: .topBarTrailing) {
-                                            cropButton(for: movie)
-                                        }
-                                    }
-                            } label: {
-                                MovieCard(code: movie.code, title: movie.title, artwork: movie.artwork,
-                                          rating: movie.rating, artworkLayout: .portrait, showsRating: false)
-                            }
-                            .buttonStyle(.plain)
-                            .overlay(alignment: .top) {
-                                VStack {
-                                    Spacer(minLength: 0)
-                                    HStack {
-                                        Spacer(minLength: 0)
-                                        cropButton(for: movie)
-                                            .labelStyle(.iconOnly)
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.white)
-                                            .frame(width: 36, height: 36)
-                                            .background(.black.opacity(0.6), in: Capsule())
-                                            .buttonStyle(.plain)
-                                            .padding(8)
-                                    }
+                            VStack(alignment: .leading, spacing: 8) {
+                                Button {
+                                    croppingMovie = movie
+                                } label: {
+                                    PosterView(source: movie.artwork, code: movie.code, layout: .portrait)
                                 }
-                                .aspectRatio(ArtworkLayout.portrait.aspectRatio, contentMode: .fit)
+                                .buttonStyle(.plain)
+                                .disabled(hideArtwork || movie.cropArtwork.isEmpty)
+                                .accessibilityLabel("裁切 \(movie.code) 封面")
+                                NavigationLink {
+                                    LibraryDetailView(movie: movie)
+                                } label: {
+                                    MovieCardCaption(code: movie.code, title: movie.title)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -153,16 +142,6 @@ struct LibraryView: View {
                 }
             }
         }
-    }
-
-    private func cropButton(for movie: LibraryMovie) -> some View {
-        Button {
-            croppingMovie = movie
-        } label: {
-            Label("裁切封面", systemImage: "crop")
-        }
-        .disabled(hideArtwork || movie.cropArtwork.isEmpty)
-        .accessibilityLabel("裁切 \(movie.code) 封面")
     }
 
     private func load(reset: Bool, preservingLoadedPages: Bool = false) async {

@@ -172,13 +172,12 @@ struct MovieCard: View {
     let artwork: String
     let rating: Double
     let artworkLayout: ArtworkLayout
-    var showsRating = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             PosterView(source: artwork, code: code, layout: artworkLayout)
                 .overlay(alignment: .bottomTrailing) {
-                    if showsRating && rating > 0 {
+                    if rating > 0 {
                         Label(rating.formatted(.number.precision(.fractionLength(1))), systemImage: "star.fill")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.white)
@@ -187,6 +186,17 @@ struct MovieCard: View {
                             .padding(8)
                     }
                 }
+            MovieCardCaption(code: code, title: title)
+        }
+    }
+}
+
+struct MovieCardCaption: View {
+    let code: String
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
             Text(code).font(.system(.subheadline, design: .monospaced).weight(.bold))
                 .foregroundStyle(.primary)
             Text(title.isEmpty ? "等待元数据" : title).font(.caption).foregroundStyle(.secondary)

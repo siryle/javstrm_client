@@ -66,16 +66,15 @@ struct DiscoverView: View {
                                               rating: movie.rating, artworkLayout: .landscape)
                                 }
                                 .buttonStyle(.plain)
-                                if let action = movie.cardAction(
+                                let action = movie.cardAction(
                                     subscriptionStatus: subscriptions[movie.id]?.status,
                                     currentState: movieStates[movie.id]?.state
-                                ) {
-                                    DiscoverCardButton(action: action, isLoading: subscribing.contains(movie.id),
-                                                       isReady: actionsReady) {
-                                        subscribe(movie)
-                                    }
-                                    .padding(8)
+                                )
+                                DiscoverCardButton(action: action, isLoading: subscribing.contains(movie.id),
+                                                   isReady: actionsReady) {
+                                    subscribe(movie)
                                 }
+                                .padding(8)
                             }
                         }
                     }

@@ -131,15 +131,21 @@ struct CoreVerification {
         try check(movie().cardAction(subscriptionStatus: nil, currentState: "not_in_library") == .subscribe)
         payload["state"] = "not_in_library"
         payload["magnets_count"] = 0
-        try check(movie().cardAction(subscriptionStatus: nil) == nil)
         try check(movie().cardAction(subscriptionStatus: "waiting") == .subscribed)
         try check(movie().cardAction(subscriptionStatus: "added") == .addedOffline)
-        payload["release_status"] = "upcoming"
+        for releaseStatus in ["released", "upcoming", "unknown"] {
+            payload["release_status"] = releaseStatus
+            try check(movie().cardAction(subscriptionStatus: nil) == .subscribe)
+            for status in ["stale", "error"] {
+                try check(movie().cardAction(subscriptionStatus: status) == .subscribe)
+            }
+        }
+        payload["magnets_count"] = NSNull()
         try check(movie().cardAction(subscriptionStatus: nil) == .subscribe)
         payload.removeValue(forKey: "release_status")
         payload.removeValue(forKey: "magnets_count")
         payload.removeValue(forKey: "state")
-        try check(movie().cardAction(subscriptionStatus: nil) == nil)
+        try check(movie().cardAction(subscriptionStatus: nil) == .subscribe)
     }
 
     static func discoverActionsTransport() async throws {

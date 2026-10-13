@@ -95,3 +95,14 @@ bash scripts/verify.sh
 - 新增 Swift 回归用例覆盖状态优先级、未发售作品和无资源作品、当前状态覆盖旧列表状态、超过 100 条订阅的分页、自动下载默认开启及显式关闭、状态请求分批、会话 Cookie、空列表和服务端错误。
 - Tree-sitter 对 23 个 Swift 文件完成辅助语法检查；测试原始 JSON 字符串及 `nonisolated(unsafe)` 在内存中适配旧语法规则，仓库文件未作这些替换。JSON fixtures、资源 JSON、property list、Scheme / workspace XML、Xcode 源文件引用和 `git diff --check` 检查通过。
 - `bash scripts/verify.sh` 因本机缺少 Xcode / Command Line Tools 而无法启动 Swift。新增回归用例尚未执行，本次未进行 iOS 编译、真实界面交互验证或 IPA 构建。
+
+## 媒体库卡片点击区域与无磁力订阅入口修复
+
+日期：2026-10-13（Asia/Shanghai）。
+
+- 媒体库卡片封面独立打开裁切窗口，番号及标题区域独立进入详情页；已移除卡片和详情工具栏的裁切按钮。封面隐藏或没有可裁切图片时保留禁止裁切的行为，卡片不显示评分。
+- 抽取共享的番号及标题视图，媒体库与发现页保持相同文字样式；文字点击区域覆盖整个文字块。
+- 发现页订阅入口不再依赖磁力数量或发行状态。磁力数量为 0、null 或缺失时均显示订阅按钮，并继续优先显示已入库、已加入离线及已订阅状态。
+- 更新回归用例覆盖无磁力资源的已发售、未发售、未知发行状态、异常订阅及磁力字段为 null 或缺失。
+- 使用现有 Tree-sitter 对 23 个 Swift 文件完成辅助语法检查，测试原始 JSON 字符串及 `nonisolated(unsafe)` 仅在内存中适配语法规则。JSON fixtures、资源 JSON、property list、Scheme / workspace XML、Xcode 源文件引用及 `git diff --check` 检查通过。
+- 本机仍缺少 Xcode / Command Line Tools，Swift 回归用例及 iOS 编译未执行；未安装依赖、运行浏览器测试或构建 IPA。
