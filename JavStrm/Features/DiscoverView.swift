@@ -53,7 +53,8 @@ struct DiscoverView: View {
                             NavigationLink {
                                 MovieDetailView(movieID: movie.id, initialMovie: movie)
                             } label: {
-                                MovieCard(code: movie.code, title: movie.title, artwork: movie.artwork, rating: movie.rating)
+                                MovieCard(code: movie.code, title: movie.title, artwork: movie.artwork,
+                                          rating: movie.rating, artworkLayout: .landscape)
                             }
                             .buttonStyle(.plain)
                         }

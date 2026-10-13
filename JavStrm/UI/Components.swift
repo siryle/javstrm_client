@@ -101,7 +101,7 @@ struct PosterView: View {
     @AppStorage("hideArtwork") private var hideArtwork = true
     let source: String
     let code: String
-    var layout: ArtworkLayout = .landscape
+    let layout: ArtworkLayout
     @State private var image: UIImage?
     @State private var failed = false
 
@@ -168,7 +168,7 @@ struct MovieCard: View {
     let title: String
     let artwork: String
     let rating: Double
-    var artworkLayout: ArtworkLayout = .landscape
+    let artworkLayout: ArtworkLayout
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

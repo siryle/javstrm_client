@@ -23,7 +23,7 @@ struct MovieDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 if let movie = displayed {
-                    PosterView(source: movie.artwork, code: movie.code)
+                    PosterView(source: movie.artwork, code: movie.code, layout: .landscape)
                         .frame(maxWidth: 560)
                         .frame(maxWidth: .infinity)
                     VStack(alignment: .leading, spacing: 10) {

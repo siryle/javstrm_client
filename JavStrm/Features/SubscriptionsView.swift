@@ -159,8 +159,8 @@ private struct SubscriptionRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             PosterView(source: item.cover, code: item.kind == "actor" ? "ACTOR" : item.code,
-                       layout: item.kind == "actor" ? .portrait : .landscape)
-                .frame(width: item.kind == "actor" ? 64 : 120)
+                       layout: .landscape)
+                .frame(width: 120)
             VStack(alignment: .leading, spacing: 8) {
                 if !item.code.isEmpty { Text(item.code).font(.system(.subheadline, design: .monospaced).weight(.bold)) }
                 Text(item.title).font(.subheadline).lineLimit(2)
