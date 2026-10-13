@@ -179,7 +179,7 @@ struct PosterCropView: View {
             self.selection = selection
         } catch {
             guard !Task.isCancelled, loadID == request, connection == session.connectionID else { return }
-            error = session.describe(error)
+            self.error = session.describe(error)
             session.handle(error)
         }
     }
@@ -199,7 +199,7 @@ struct PosterCropView: View {
             dismiss()
         } catch {
             guard connection == session.connectionID else { return }
-            error = session.describe(error)
+            self.error = session.describe(error)
             session.handle(error)
         }
     }
