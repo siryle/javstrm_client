@@ -46,7 +46,7 @@ if [ "$mode" = unsigned ]; then
   [ -d "$app_path" ] || { printf 'Archive contains no JavStrm.app.\n' >&2; exit 1; }
   platform="$(plutil -extract DTPlatformName raw -o - "$app_path/Info.plist")"
   [ "$platform" = iphoneos ] || { printf 'Refusing to package a non-device build.\n' >&2; exit 1; }
-  xcrun lipo -verify_arch arm64 "$app_path/JavStrm"
+  xcrun lipo "$app_path/JavStrm" -verify_arch arm64
   ipa_staging="$(mktemp -d "${TMPDIR:-/tmp}/javstrm-ipa.XXXXXX")"
   trap 'rm -rf "$ipa_staging"' EXIT
   mkdir -p "$ipa_staging/Payload"

@@ -21,6 +21,8 @@ jobs:
     name: Build JavStrm unsigned IPA
     runs-on: macos-15
     timeout-minutes: 30
+    permissions:
+      contents: write
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     defaults:
@@ -54,6 +56,38 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+      - name: Publish IPA to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          assets=(build/ipa-*/JavStrm-unsigned.ipa build/ipa-*/JavStrm-unsigned.json)
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            release_tag="$GITHUB_REF_NAME"
+            release_options=(--verify-tag)
+          else
+            release_tag="ci-${GITHUB_RUN_NUMBER}"
+            release_options=(--target "$GITHUB_SHA" --prerelease --latest=false)
+          fi
+
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$release_tag" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            notes_file="$(mktemp)"
+            printf 'Unsigned iOS IPA built from commit %s.\n\nWorkflow: %s/%s/actions/runs/%s\n\nSign the IPA before installing it on an iPhone or iPad.\n' \
+              "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" \
+              > "$notes_file"
+            gh release create "$release_tag" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "JavStrm ${release_tag}" \
+              --notes-file "$notes_file" \
+              "${release_options[@]}"
+            rm -f "$notes_file"
+          fi
+
+          release_url="$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json url --jq '.url')"
+          printf 'Release: [%s](%s)\n' "$release_tag" "$release_url" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build logs
         if: ${{ always() }}

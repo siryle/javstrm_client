@@ -108,9 +108,13 @@ xcodebuild \
 1. 将完整项目（包括 Xcode 工程、源码、资源、`scripts/` 和 `.github/`）推送到 GitHub 仓库。当前 `origin` 指向 Gitea，仅推送到该远程不会运行 GitHub Actions。
 2. 在 GitHub 仓库的 **Actions → Build unsigned IPA → Run workflow** 中选择分支并运行。手动运行入口需要工作流已存在于仓库默认分支。
 3. 推送到 `main` / `master` 分支，或推送 `v*` 标签（例如 `v1.0.0`），也会自动触发构建。
-4. 构建成功后，在该次运行页面的 **Artifacts** 中下载 `JavStrm-unsigned-ipa-运行编号`，解压后获得 `JavStrm-unsigned.ipa` 和同名 JSON 检查报告。
+4. 构建成功后，在仓库的 **Releases** 页面直接下载 `JavStrm-unsigned.ipa` 和同名 JSON 检查报告。运行页面的摘要也会提供 Release 链接；**Artifacts** 中仍保留 `JavStrm-unsigned-ipa-运行编号` 下载入口。
 
-产物保留 14 天。Archive 构建日志另存为 `JavStrm-build-logs-运行编号`，构建失败时也会尝试上传已生成的日志。工作流先执行核心与工程验证，再构建 Release 配置的 iPhoneOS arm64 包并检查 IPA 容器、设备平台和签名材料。
+推送 `v*` 标签或手动选择标签构建时，产物上传到同名 Release；如果该 Release 不存在，工作流会自动创建。分支推送和在分支上手动构建时，每次运行创建 `ci-运行编号` 预发布版本，并将标签指向本次构建的提交。重新运行同一次工作流会更新原 Release 的同名附件。
+
+发布使用自动提供的 `GITHUB_TOKEN`，工作流已为构建任务声明 `contents: write` 权限，无需额外配置 PAT。
+
+Actions Artifacts 中的产物保留 14 天；Release 附件不受此保留期限制。Archive 构建日志另存为 `JavStrm-build-logs-运行编号`，构建失败时也会尝试上传已生成的日志。工作流先执行核心与工程验证，再构建 Release 配置的 iPhoneOS arm64 包并检查 IPA 容器、设备平台和签名材料。
 
 未签名 IPA 需要自行签名后才能在普通 iPhone / iPad 上安装。
 
