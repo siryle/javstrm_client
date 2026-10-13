@@ -166,28 +166,24 @@ struct PosterView: View {
     }
 }
 
-struct MovieCard: View {
+struct MovieCardPoster: View {
     let code: String
-    let title: String
     let artwork: String
     let rating: Double
     let artworkLayout: ArtworkLayout
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PosterView(source: artwork, code: code, layout: artworkLayout)
-                .overlay(alignment: .bottomTrailing) {
-                    if rating > 0 {
-                        Label(rating.formatted(.number.precision(.fractionLength(1))), systemImage: "star.fill")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.white)
-                            .padding(7)
-                            .background(.black.opacity(0.6), in: Capsule())
-                            .padding(8)
-                    }
+        PosterView(source: artwork, code: code, layout: artworkLayout)
+            .overlay(alignment: .bottomTrailing) {
+                if rating > 0 {
+                    Label(rating.formatted(.number.precision(.fractionLength(1))), systemImage: "star.fill")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(7)
+                        .background(.black.opacity(0.6), in: Capsule())
+                        .padding(8)
                 }
-            MovieCardCaption(code: code, title: title)
-        }
+            }
     }
 }
 

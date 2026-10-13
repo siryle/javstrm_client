@@ -57,25 +57,34 @@ struct DiscoverView: View {
                 } else {
                     LazyVGrid(columns: columns, spacing: 22) {
                         ForEach(movies) { movie in
-                            ZStack(alignment: .bottomTrailing) {
+                            VStack(alignment: .leading, spacing: 8) {
                                 NavigationLink {
                                     MovieDetailView(movieID: movie.id, initialMovie: movie)
                                         .onDisappear { Task { await refreshActions() } }
                                 } label: {
-                                    MovieCard(code: movie.code, title: movie.title, artwork: movie.artwork,
-                                              rating: movie.rating, artworkLayout: .landscape)
+                                    MovieCardPoster(code: movie.code, artwork: movie.artwork,
+                                                    rating: movie.rating, artworkLayout: .landscape)
                                 }
                                 .buttonStyle(.plain)
-                                .padding(.bottom, 52)
-                                let action = movie.cardAction(
-                                    subscriptionStatus: subscriptions[movie.id]?.status,
-                                    currentState: movieStates[movie.id]?.state
-                                )
-                                DiscoverCardButton(action: action, isLoading: subscribing.contains(movie.id),
-                                                   isReady: actionsReady) {
-                                    subscribe(movie)
+                                HStack(alignment: .top, spacing: 8) {
+                                    NavigationLink {
+                                        MovieDetailView(movieID: movie.id, initialMovie: movie)
+                                            .onDisappear { Task { await refreshActions() } }
+                                    } label: {
+                                        MovieCardCaption(code: movie.code, title: movie.title)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .buttonStyle(.plain)
+                                    let action = movie.cardAction(
+                                        subscriptionStatus: subscriptions[movie.id]?.status,
+                                        currentState: movieStates[movie.id]?.state
+                                    )
+                                    DiscoverCardButton(action: action, isLoading: subscribing.contains(movie.id),
+                                                       isReady: actionsReady) {
+                                        subscribe(movie)
+                                    }
+                                    .fixedSize(horizontal: true, vertical: false)
                                 }
-                                .padding(8)
                             }
                         }
                     }
