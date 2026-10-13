@@ -13,7 +13,7 @@ struct DiscoverView: View {
     @State private var loading = false
     @State private var error: String?
     @State private var requestID = UUID()
-    private let columns = [GridItem(.adaptive(minimum: 145, maximum: 220), spacing: 16)]
+    private let columns = [GridItem(.adaptive(minimum: 240, maximum: 360), spacing: 16)]
 
     var body: some View {
         ScrollView {

@@ -71,7 +71,8 @@ struct LibraryView: View {
                             NavigationLink {
                                 LibraryDetailView(movie: movie)
                             } label: {
-                                MovieCard(code: movie.code, title: movie.title, artwork: movie.artwork, rating: movie.rating)
+                                MovieCard(code: movie.code, title: movie.title, artwork: movie.artwork,
+                                          rating: movie.rating, artworkLayout: .portrait)
                             }
                             .buttonStyle(.plain)
                         }
@@ -165,7 +166,7 @@ private struct LibraryDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                PosterView(source: movie.artwork, code: movie.code)
+                PosterView(source: movie.artwork, code: movie.code, layout: .portrait)
                     .frame(maxWidth: 260)
                     .frame(maxWidth: .infinity)
                 Text(movie.code).font(.system(.title, design: .monospaced).weight(.bold))

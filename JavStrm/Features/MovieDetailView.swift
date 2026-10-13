@@ -24,7 +24,7 @@ struct MovieDetailView: View {
             VStack(alignment: .leading, spacing: 24) {
                 if let movie = displayed {
                     PosterView(source: movie.artwork, code: movie.code)
-                        .frame(maxWidth: 260)
+                        .frame(maxWidth: 560)
                         .frame(maxWidth: .infinity)
                     VStack(alignment: .leading, spacing: 10) {
                         Text(movie.code).font(.system(.title, design: .monospaced).weight(.bold))

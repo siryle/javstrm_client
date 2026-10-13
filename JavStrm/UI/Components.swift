@@ -80,11 +80,28 @@ struct StatusPill: View {
     }
 }
 
+enum ArtworkLayout {
+    case portrait
+    case landscape
+
+    var aspectRatio: CGFloat {
+        switch self {
+        case .portrait: 2 / 3
+        case .landscape: 3 / 2
+        }
+    }
+
+    var contentMode: ContentMode {
+        self == .portrait ? .fill : .fit
+    }
+}
+
 struct PosterView: View {
     @Environment(AppSession.self) private var session
     @AppStorage("hideArtwork") private var hideArtwork = true
     let source: String
     let code: String
+    var layout: ArtworkLayout = .landscape
     @State private var image: UIImage?
     @State private var failed = false
 
@@ -94,9 +111,17 @@ struct PosterView: View {
                 LinearGradient(colors: [Palette.ink, Palette.accent.opacity(0.8)],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
                 if let image, !hideArtwork {
+                    if layout == .landscape {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .blur(radius: 20)
+                            .brightness(-0.25)
+                    }
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFill()
+                        .aspectRatio(contentMode: layout.contentMode)
                         .frame(width: geometry.size.width, height: geometry.size.height)
                         .clipped()
                 } else {
@@ -116,7 +141,7 @@ struct PosterView: View {
                 }
             }
         }
-        .aspectRatio(2 / 3, contentMode: .fit)
+        .aspectRatio(layout.aspectRatio, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityLabel(hideArtwork ? "封面已隐藏，\(code)" : "\(code) 封面")
         .task(id: "\(session.connectionID)|\(source)|\(hideArtwork)") {
@@ -143,10 +168,11 @@ struct MovieCard: View {
     let title: String
     let artwork: String
     let rating: Double
+    var artworkLayout: ArtworkLayout = .landscape
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            PosterView(source: artwork, code: code)
+            PosterView(source: artwork, code: code, layout: artworkLayout)
                 .overlay(alignment: .bottomTrailing) {
                     if rating > 0 {
                         Label(rating.formatted(.number.precision(.fractionLength(1))), systemImage: "star.fill")
