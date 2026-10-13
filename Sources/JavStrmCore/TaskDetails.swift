@@ -23,7 +23,7 @@ private let detailLabels = [
     "strm_paths": "媒体文件", "metadata_paths": "元数据", "directory_path": "目录",
     "emby_path": "Emby 路径", "miyabi_path": "JavStrm 路径", "p115_path": "115 路径",
     "item_id": "媒体项 ID", "source_id": "媒体源 ID", "person_id": "演员 ID",
-    "code": "番号", "name": "名称",
+    "code": "番号", "name": "名称", "group_id": "配置组标识", "group_name": "配置组",
     "error": "错误信息"
 ]
 
@@ -118,7 +118,9 @@ public struct WorkflowResult: Decodable, Sendable, Equatable {
     }
 
     public var status: String { fields["status"]?.text ?? "" }
-    public var title: String { fields["code"]?.text ?? fields["name"]?.text ?? "" }
+    public var title: String {
+        ["code", "name", "group_name"].compactMap { fields[$0]?.detailText }.first { !$0.isEmpty } ?? ""
+    }
     public var error: String { fields["error"]?.detailText ?? "" }
 
     public var detailFields: [TaskDetailField] {

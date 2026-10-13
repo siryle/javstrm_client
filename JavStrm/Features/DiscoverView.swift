@@ -159,7 +159,11 @@ struct DiscoverView: View {
             async let states = api.movieStates(currentMovies)
             let (items, currentStates) = try await (subscriptions, states)
             guard !Task.isCancelled, actionRequestID == request, connection == session.connectionID else { return }
-            self.subscriptions = items.reduce(into: [:]) { $0[$1.targetId] = $1 }
+            var refreshed = items.reduce(into: [String: Subscription]()) { $0[$1.targetId] = $1 }
+            for id in subscribing {
+                if let item = self.subscriptions[id] { refreshed[id] = item }
+            }
+            self.subscriptions = refreshed
             movieStates = currentStates.reduce(into: [:]) { $0[$1.id] = $1 }
             actionsReady = true
         } catch {
@@ -176,10 +180,35 @@ struct DiscoverView: View {
         subscribing.insert(movie.id)
         Task {
             defer { subscribing.remove(movie.id) }
-            let success = await session.perform(success: "作品已订阅，符合偏好的资源出现后会自动下载。") { api in
-                let _ = try await api.subscribeMovie(targetID: movie.id)
+            guard let api = session.client else { return }
+            let connection = session.connectionID
+            do {
+                let item = try await api.subscribeMovie(targetID: movie.id)
+                guard connection == session.connectionID, !Task.isCancelled else { return }
+                actionRequestID = UUID()
+                subscriptions[movie.id] = item
+                actionsReady = true
+                session.notice = .init(message: "作品已订阅，正在检查资源。")
+                let checked = try await api.checkSubscription(id: item.id)
+                guard connection == session.connectionID, !Task.isCancelled else { return }
+                actionRequestID = UUID()
+                switch checked {
+                case .updated(let updated):
+                    subscriptions[movie.id] = updated
+                    session.notice = .init(message: updated.status == "added"
+                                           ? "已加入离线下载。" : "已订阅，暂无符合偏好的资源，后续会自动检查。")
+                case .imported:
+                    subscriptions[movie.id] = nil
+                    movieStates[movie.id] = .init(id: movie.id, state: "in_library")
+                    session.notice = .init(message: "作品已入库。")
+                }
+                await session.refreshTasks()
+            } catch {
+                guard connection == session.connectionID, !Task.isCancelled else { return }
+                session.handle(error)
+                session.notice = .init(message: subscriptions[movie.id] == nil
+                                       ? session.describe(error) : "作品已订阅，立即检查失败：\(session.describe(error))")
             }
-            if success { await refreshActions() }
         }
     }
 }

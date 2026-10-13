@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-// A separate window also covers sheets and WebKit when iOS snapshots the app.
+// A separate window also covers sheets when iOS snapshots the app.
 struct PrivacyShield: UIViewRepresentable {
     let enabled: Bool
     let isVisible: Bool

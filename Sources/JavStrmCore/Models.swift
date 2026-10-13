@@ -150,7 +150,7 @@ public struct DiscoverMovie: Decodable, Identifiable, Sendable {
         if state == "saving" || state == "processing" || subscriptionStatus == "added" {
             return .addedOffline
         }
-        if subscriptionStatus == "waiting" { return .subscribed }
+        if subscriptionStatus != nil { return .subscribed }
         return .subscribe
     }
 }
@@ -163,6 +163,12 @@ public struct DiscoverMovieState: Decodable, Identifiable, Sendable {
     public let id: String
     public let libraryId: Int?
     public let state: String
+
+    public init(id: String, libraryId: Int? = nil, state: String) {
+        self.id = id
+        self.libraryId = libraryId
+        self.state = state
+    }
 }
 
 public struct Magnet: Decodable, Identifiable, Sendable {
@@ -188,6 +194,22 @@ public struct Subscription: Decodable, Identifiable, Sendable {
     public let checks: Int
     public let error: String?
     public let nextCheckAt: String?
+}
+
+public enum SubscriptionCheckResult: Decodable, Sendable {
+    case imported
+    case updated(Subscription)
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if try container.decodeIfPresent(Bool.self, forKey: .imported) == true {
+            self = .imported
+        } else {
+            self = .updated(try Subscription(from: decoder))
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case imported }
 }
 
 public struct ServerTask: Decodable, Identifiable, Sendable {

@@ -7,7 +7,6 @@ struct TasksView: View {
     @State private var busy = false
     @State private var pendingAction: PendingAction?
     @State private var showConfirmation = false
-    @State private var portal: WebDestination?
 
     private struct PendingAction {
         let title: String
@@ -117,8 +116,8 @@ struct TasksView: View {
                                        description: Text("服务端任务会在这里自动更新。"))
             }
             Section {
-                Button {
-                    portal = WebDestination(title: "完整任务历史", path: "/tasks")
+                NavigationLink {
+                    TaskHistoryView()
                 } label: {
                     Label("查看完整任务历史与处理结果", systemImage: "clock.arrow.circlepath")
                 }
@@ -146,7 +145,7 @@ struct TasksView: View {
                                 body: ["id": .string("")],
                                 description: "执行服务端已配置的全部生成组，使用各组的覆盖及清理规则。")
                     }
-                    Button("配置工具") { portal = .init(title: "服务端工具", path: "/tools") }
+                    NavigationLink("配置工具") { ServerToolsView() }
                 } label: { Image(systemName: "plus.circle") }
                 .disabled(busy)
             }
@@ -156,7 +155,6 @@ struct TasksView: View {
             Button(pendingAction?.title ?? "确认", role: pendingAction?.path.contains("terminate") == true
                    || pendingAction?.path.contains("cancel") == true ? .destructive : nil) { execute() }
         } message: { Text(pendingAction?.description ?? "") }
-        .sheet(item: $portal) { WebPortalView(destination: $0) }
     }
 
     private func matches(_ status: String) -> Bool {
@@ -209,7 +207,7 @@ private struct TaskRow: View {
     }
 }
 
-private struct TaskDetailView: View {
+struct TaskDetailView: View {
     @Environment(AppSession.self) private var session
     let taskID: Int
     let initialTask: ServerTask

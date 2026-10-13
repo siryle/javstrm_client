@@ -175,11 +175,38 @@ struct MovieDetailView: View {
         let auto = autoDownload
         busy = true
         Task {
-            await session.perform(success: "作品已订阅。") { api in
-                let _ = try await api.subscribeMovie(targetID: id, autoDownload: auto)
+            defer { busy = false }
+            guard let api = session.client else { return }
+            let connection = session.connectionID
+            do {
+                let item = try await api.subscribeMovie(targetID: id, autoDownload: auto)
+                guard connection == session.connectionID, !Task.isCancelled else { return }
+                subscription = item
+                subscriptionReady = true
+                subscriptionError = nil
+                var message = "作品已订阅。"
+                if auto {
+                    let checked = try await api.checkSubscription(id: item.id)
+                    guard connection == session.connectionID, !Task.isCancelled else { return }
+                    switch checked {
+                    case .updated(let updated):
+                        subscription = updated
+                        message = updated.status == "added" ? "已加入离线下载。" : "已订阅，后续会自动检查资源。"
+                    case .imported:
+                        subscription = nil
+                        message = "作品已入库。"
+                        await load()
+                    }
+                }
+                guard connection == session.connectionID, !Task.isCancelled else { return }
+                session.notice = .init(message: message)
+                await session.refreshTasks()
+            } catch {
+                guard connection == session.connectionID, !Task.isCancelled else { return }
+                session.handle(error)
+                subscriptionError = subscription == nil ? session.describe(error)
+                    : "作品已订阅，立即检查失败：\(session.describe(error))"
             }
-            await loadSubscription()
-            busy = false
         }
     }
 

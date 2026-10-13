@@ -31,9 +31,9 @@ struct FileBrowserView: View {
                      ? "此处浏览的是服务器目录。文件操作可从设置页的「文件复制、移动与管理」进入。"
                      : "进入目标文件夹后，选择当前目录。")
                     .font(.footnote).foregroundStyle(.secondary)
-                if selectDirectory != nil, directory != "0" {
-                    NavigationLink("返回网盘根目录") {
-                        FileBrowserView(source: source, directory: "0",
+                if selectDirectory != nil, directory != (source == "pan" ? "0" : "/") {
+                    NavigationLink("返回根目录") {
+                        FileBrowserView(source: source, directory: source == "pan" ? "0" : "/",
                                         selectionTitle: selectionTitle, selectDirectory: selectDirectory)
                     }
                     .disabled(selecting)
@@ -45,9 +45,12 @@ struct FileBrowserView: View {
                         guard !selecting else { return }
                         selecting = true
                         defer { selecting = false }
-                        let name = path.last?.name ?? (directory == "0" ? "根目录" : directory)
-                        let fullPath = "/" + path.filter { $0.id != "0" }.map(\.name).joined(separator: "/")
-                        selectionError = await selectDirectory(PanDirectory(id: directory, name: name, path: fullPath))
+                        let name = source == "pan" ? (path.last?.name ?? (directory == "0" ? "根目录" : directory))
+                            : URL(fileURLWithPath: currentPath).lastPathComponent
+                        let fullPath = source == "pan" ? "/" + path.filter { $0.id != "0" }.map(\.name).joined(separator: "/")
+                            : currentPath
+                        selectionError = await selectDirectory(PanDirectory(id: source == "pan" ? directory : currentPath,
+                                                                           name: name, path: fullPath))
                     }
                 } label: {
                     if selecting { ProgressView("正在保存") }

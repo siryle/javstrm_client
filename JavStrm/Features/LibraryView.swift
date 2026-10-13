@@ -73,6 +73,14 @@ struct LibraryView: View {
                                 .accessibilityLabel("裁切 \(movie.code) 封面")
                                 NavigationLink {
                                     LibraryDetailView(movie: movie)
+                                        .toolbar {
+                                            ToolbarItem(placement: .topBarTrailing) {
+                                                Button { croppingMovie = movie } label: {
+                                                    Label("裁切封面", systemImage: "crop")
+                                                }
+                                                .disabled(hideArtwork || movie.cropArtwork.isEmpty)
+                                            }
+                                        }
                                 } label: {
                                     MovieCardCaption(code: movie.code, title: movie.title)
                                         .frame(maxWidth: .infinity, alignment: .leading)

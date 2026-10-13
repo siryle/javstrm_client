@@ -10,7 +10,9 @@ Branch: main
 Commit: 00c574eedc7613150a98d3e93fafe61a28ade34a
 ```
 
-## 已通过
+## 初次版本已通过
+
+以下为早期版本的历史验证记录，本次变更的检查结果见文末。
 
 - Swift 6.3.1 在本机 macOS 上编译 `JavStrmCore` 和验证程序。
 - 地址验证：HTTP / HTTPS、缺省 scheme、子路径、查询参数编码、路径段编码、非法 URL、路径越界拒绝。
@@ -34,7 +36,7 @@ Commit: 00c574eedc7613150a98d3e93fafe61a28ade34a
 bash scripts/verify.sh
 ```
 
-## 尚未验证
+## 初次版本尚未验证
 
 - iOS SDK 下完整构建、模拟器运行和真机安装。
 - 真实部署服务的登录、115 账户状态、网络权限提示、业务写操作和 Web 管理交互。
@@ -43,7 +45,7 @@ bash scripts/verify.sh
 
 初次验证时本机只有 Command Line Tools；用户随后授权下载 Xcode 并生成未签名 IPA。已从官方 App Store 下载 Xcode 27.0（27A266a），安装包通过 Apple 签名检查，并成功安装至 `/Applications/Xcode.app`。App Store 的旧安装服务连接报错后，使用保留的官方安装包完成安装。
 
-当前设备构建等待 Xcode 首次初始化的系统管理员确认（`xcodebuild -license accept` 和 `xcodebuild -runFirstLaunch`）。已启动构建等待进程，初始化完成后自动执行 `bash scripts/build_ipa.sh unsigned`，日志写入 `build/unsigned-build.log`。尚未生成 IPA，不能将安装成功等同于 iOS 编译成功。
+当时的设备构建等待 Xcode 首次初始化的系统管理员确认（`xcodebuild -license accept` 和 `xcodebuild -runFirstLaunch`）。曾启动构建等待进程，初始化完成后自动执行 `bash scripts/build_ipa.sh unsigned`，日志写入 `build/unsigned-build.log`。该记录尚未生成 IPA，不能将安装成功等同于 iOS 编译成功；当前环境状态见最新变更记录。
 
 真实服务地址已确认，但没有提供服务端登录凭据。本机初始检查没有有效代码签名身份或现有设备描述文件。下载日志位置为 `/Users/sean/Downloads/javstrm-xcode-install.log`，此文件不包含 Apple 账户或管理员密码。
 
@@ -62,7 +64,11 @@ bash scripts/verify.sh
 | 账号与文件 | `GET /api/pan/account`、`GET /api/pan/files`、`GET /api/files/local` |
 | 原生网盘设置 | `POST /api/pan/cookie/login`、`GET /api/pan/cookie/login/:id`、`DELETE /api/pan/cookie`、`PUT / DELETE /api/pan/directory`、`PUT / DELETE /api/pan/organize-directory` |
 | 日志与图片 | `GET /api/logs`、`GET /api/image`、`GET /api/library/artwork/:key` |
-| 高级管理页面 | `/settings`、`/tools`、`/files`、`/tasks` |
+| 原生服务端设置 | `GET / PUT /api/settings/{network,scraping,organize,local-organize,strm-scrape,quick-strm,subscription,emby,emby/cover,empty-directory}`、`POST /api/settings/{network,emby}/test` |
+| 原生 Emby 工具 | `POST /api/settings/emby/actors/sync`、`GET /api/emby/covers/libraries`、`POST /api/emby/covers/{prepare,upload}`、`POST /api/pan/organize-directory/empty` |
+| 原生文件操作 | `POST /api/files/{local,pan}/operations` |
+| 数据与配置 | `GET /api/settings/system`、`DELETE /api/settings/cache`、`GET /api/settings/export`、`POST /api/settings/import` |
+| 原生任务历史 | `GET /api/tasks/:kind/history`、`GET /api/tasks/:kind/:id/results`、`GET /api/quick-strm/jobs/history`、`GET /api/quick-strm/jobs/:id/results` |
 
 ## 媒体库横向图与封面裁切变更验证
 
@@ -118,3 +124,15 @@ bash scripts/verify.sh
 - 新增 Swift 回归用例覆盖二维码数据解码与无效数据、全部扫码方式、五种登录状态、登录会话路径编码、两类目录保存与清除（包含根目录）、网盘退出保留 App Token、115 业务 401 与 App `AUTH_REQUIRED` 的区别及保存错误。
 - 使用已有 Tree-sitter 对 26 个 Swift 文件完成辅助语法检查；测试原始 JSON 字符串及 `nonisolated(unsafe)` 仅在内存中适配旧语法规则。工程源文件引用及构建阶段、Scheme / workspace XML、资源 JSON、固定接口样本、property list 和 `git diff --check` 检查通过。
 - `bash scripts/verify.sh` 因本机缺少 Xcode / Command Line Tools 而无法启动 Swift；新增回归用例和 iOS 编译尚未执行。未安装依赖、运行浏览器测试、修改真实服务器网盘配置或构建 IPA。真实扫码授权、目录写入及 iPhone / iPad 交互仍需用户验收，具体项目见 `docs/ACCEPTANCE.md`。
+
+## 即时订阅检查与原生管理页面变更验证
+
+日期：2026-10-13（Asia/Shanghai）。
+
+- 已核对本地后端订阅创建和 `EnqueueSingle` 实现：创建成功后立即保留返回的订阅，再调用 `POST /api/subscriptions/:id/enqueue`。暂无符合偏好的资源时返回 waiting 并继续定时检查；已入库时返回包含 `imported=true` 的部分字段响应，客户端单独解码该响应。检查失败保留订阅并提示错误，stale / error 状态仍显示「已订阅」。
+- 媒体库详情工具栏恢复裁切封面按钮；卡片继续采用封面裁切、番号 / 标题进入详情的独立点击区域，卡片不显示评分或单独裁切按钮。
+- 三个管理入口已替换为原生 SwiftUI 页面：支持 10 类服务端配置读取和保存、网络 / Emby 连接测试、整理 / STRM / 演员补全 / 空目录清理任务、Emby 原生封面生成及上传、配置导入导出、缓存统计和清理。编辑保留未修改字段、API Key、原始键名和 null 值；目录选择兼容本地路径及 115 标识。
+- 原生文件管理支持目录浏览、分页、最多 100 项选择、复制、移动、重命名和确认删除，显示逐项失败并刷新列表；115 操作附带选定账号标识，服务端校验账号变化。任务配置和历史入口也改为原生导航，移除 WebPortalView 及 WebKit 依赖页面。原生历史目前提供浏览 / 搜索和处理结果，未增加历史删除与纠错操作。
+- 补充回归用例覆盖立即检查的 waiting / added / imported 响应、设置根数组与对象及格式验证、嵌套 / 未知字段保留、文件操作校验与两种来源的四种操作、配置归档验证和导入导出、8 类工作流历史、快速 STRM 结果与路径编码、Emby 媒体库 / 预览准备 / 上传请求及配置变化错误。
+- 使用已有 Tree-sitter 对 30 个 Swift 文件完成辅助语法检查；原始 JSON 字符串和 `nonisolated(unsafe)` 只在内存中适配旧语法规则。重新生成 Xcode 工程后，全部 App 源文件引用、Scheme / workspace XML、资源 JSON、接口固定样本、property list 和 `git diff --check` 检查通过。
+- 当前 `xcode-select -p` 无可用开发工具目录，且没有 `/Applications/Xcode.app`。未执行 Swift 编译器类型检查、新增回归用例、iOS 构建或真实服务写入联调；辅助语法解析不代表编译通过。未安装依赖、运行浏览器测试或构建 IPA。用户交互验收项已更新至 `docs/ACCEPTANCE.md`。

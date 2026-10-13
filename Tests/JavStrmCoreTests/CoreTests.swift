@@ -39,6 +39,11 @@ struct CoreVerification {
             try panLoginModels()
             try await panSettingsTransport()
             print("PASS: native pan QR sessions, scan methods, login states, directory settings and auth isolation")
+            try managementModels()
+            try await managementTransport()
+            print("PASS: immediate subscription checks, native settings, file operations and configuration archives")
+            try await managementHistoryAndCovers()
+            print("PASS: native workflow/STRM history, cover preparation and upload protocols")
             try await events()
             print("PASS: address validation, SSE parser/transport, 7 backend fixtures, login cookies, auth expiration/isolation, service detection, null lists, image proxy")
         } catch {
@@ -126,7 +131,7 @@ struct CoreVerification {
         try check(movie().cardAction(subscriptionStatus: "waiting") == .subscribed)
         try check(movie().cardAction(subscriptionStatus: "added") == .addedOffline)
         for status in ["stale", "error"] {
-            try check(movie().cardAction(subscriptionStatus: status) == .subscribe)
+            try check(movie().cardAction(subscriptionStatus: status) == .subscribed)
         }
         try check(movie().cardAction(subscriptionStatus: "waiting", currentState: "in_library") == .inLibrary)
         try check(movie().cardAction(subscriptionStatus: nil, currentState: "saving") == .addedOffline)
@@ -140,7 +145,7 @@ struct CoreVerification {
             payload["release_status"] = releaseStatus
             try check(movie().cardAction(subscriptionStatus: nil) == .subscribe)
             for status in ["stale", "error"] {
-                try check(movie().cardAction(subscriptionStatus: status) == .subscribe)
+                try check(movie().cardAction(subscriptionStatus: status) == .subscribed)
             }
         }
         payload["magnets_count"] = NSNull()
@@ -551,6 +556,241 @@ struct CoreVerification {
         catch let error as URLError { try check(error.code == .networkConnectionLost) }
         let snapshot = await recorder.events
         try check(snapshot.count == 2 && snapshot.first?.name == "tasks" && snapshot.last?.name == "ping")
+        await client.close()
+    }
+
+    static func managementModels() throws {
+        for setting in ServerSetting.allCases {
+            try check(setting.endpoint.hasPrefix("/api/settings/"))
+            try check(Set(setting.fields.map(\.id)).count == setting.fields.count)
+        }
+        var emby: JSONValue = .object([
+            "api_key": .string("saved-key"), "sync_delete_mappings": .null,
+            "favorite_transfer_groups": .array([.object(["target_mapping": .string("12#/local#/emby")])]),
+            "future_option": .bool(true)
+        ])
+        emby["server_url"] = .string("https://emby.example")
+        try check(emby["api_key"] == .string("saved-key") && emby["sync_delete_mappings"] == .null)
+        try check(emby["future_option"] == .bool(true))
+        let encoded = try JSONEncoder().encode(emby)
+        let decoded = try WireJSON.decoder().decode(JSONValue.self, from: encoded)
+        try check(decoded == emby && decoded["favorite_transfer_groups"].arrayValue.count == 1)
+        let base = FileOperation(source: .local, action: .copy, ids: ["/a"], directory: "/", destination: "/b")
+        try check(base.isValid && base.body["destination"] == .string("/b") && base.body["account_id"] == nil)
+        try check(!FileOperation(source: .pan, action: .delete, ids: ["1"], directory: "0").isValid)
+        try check(!FileOperation(source: .local, action: .delete, ids: [], directory: "/").isValid)
+        try check(!FileOperation(source: .local, action: .delete, ids: ["/a", "/a"], directory: "/").isValid)
+        try check(!FileOperation(source: .local, action: .copy, ids: ["/a"], directory: "/").isValid)
+        try check(!FileOperation(source: .local, action: .rename, ids: ["/a", "/b"], directory: "/", name: "a").isValid)
+        for name in ["", " ", ".", "..", "a/b", "a\\b", "a\0b", String(repeating: "a", count: 256)] {
+            try check(!FileOperation(source: .local, action: .rename, ids: ["/a"], directory: "/", name: name).isValid)
+        }
+        try check(FileOperation(source: .pan, action: .rename, ids: ["1"], directory: "0", name: "新名称", accountID: "account").isValid)
+        try check(!FileOperation(source: .local, action: .delete, ids: (0...100).map(String.init), directory: "/").isValid)
+        let archive: JSONValue = .object(["format": .string("javstrm-settings"), "version": .number(1),
+                                         "settings": .array([]), "subscriptions": .array([])])
+        try validateConfigurationArchive(archive)
+        var legacy = archive
+        legacy["format"] = .string("miyabi-settings")
+        try validateConfigurationArchive(legacy)
+        var invalid = archive
+        invalid["version"] = .number(2)
+        do { try validateConfigurationArchive(invalid); throw Failure("Accepted unsupported configuration version") }
+        catch ManagementError.invalidArchive {}
+        invalid = archive
+        invalid["browser"] = .object(["theme": .string("unknown"), "nsfw_mode": .bool(true)])
+        do { try validateConfigurationArchive(invalid); throw Failure("Accepted invalid browser settings") }
+        catch ManagementError.invalidArchive {}
+    }
+
+    static func managementTransport() async throws {
+        let client = try mockClient()
+        await client.adoptBrowserToken(SessionToken(value: "management-session"))
+        let subscriptions = try require(JSONSerialization.jsonObject(with: fixture("subscriptions")) as? [[String: Any]])
+        let waiting = try JSONSerialization.data(withJSONObject: require(subscriptions.first))
+        let added = try JSONSerialization.data(withJSONObject: require(subscriptions.last))
+        for (expected, response) in [
+            ("waiting", waiting), ("added", added),
+            ("imported", Data(#"{"id":2,"kind":"movie","code":"ABP-123","imported":true}"#.utf8))
+        ] {
+            MockURLProtocol.handler = { request in
+                try check(request.httpMethod == "POST" && request.url?.path == "/api/subscriptions/2/enqueue")
+                try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=management-session")
+                return (200, [:], response)
+            }
+            let checked = try await client.checkSubscription(id: 2)
+            switch checked {
+            case .updated(let item):
+                try check(expected != "imported" && item.status == expected && item.autoDownload)
+            case .imported: try check(expected == "imported")
+            }
+        }
+        let object: JSONValue = .object([
+            "api_key": .string("retained"), "schedule_enabled": .bool(false),
+            "groups": .array([.object(["id": .string("group-1"), "source": .object(["id": .string("12")])])]),
+            "sync_delete_mappings": .null, "future_option": .bool(true)
+        ])
+        for setting in ServerSetting.allCases {
+            let value: JSONValue = setting == .scraping
+                ? .array([.object(["id": .string("fanza"), "enabled": .bool(true)])]) : object
+            let response = try JSONEncoder().encode(value)
+            MockURLProtocol.handler = { request in
+                try check(request.url?.path == setting.endpoint)
+                try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=management-session")
+                if request.httpMethod == "PUT" {
+                    try check(JSONDecoder().decode(JSONValue.self, from: requestBody(request)) == value)
+                } else { try check(request.httpMethod == "GET") }
+                return (200, [:], response)
+            }
+            let loaded = try await client.serverSettings(setting)
+            let saved = try await client.saveServerSettings(setting, value: loaded)
+            try check(loaded == value && saved == value)
+        }
+        MockURLProtocol.handler = { _ in throw Failure("Invalid settings must not send requests") }
+        do {
+            _ = try await client.saveServerSettings(.scraping, value: object)
+            throw Failure("Accepted object for scraping sources")
+        } catch ManagementError.invalidSetting {}
+        do {
+            _ = try await client.saveServerSettings(.emby, value: .array([]))
+            throw Failure("Accepted array for Emby settings")
+        } catch ManagementError.invalidSetting {}
+        MockURLProtocol.handler = { _ in (200, [:], Data("null".utf8)) }
+        do {
+            _ = try await client.serverSettings(.network)
+            throw Failure("Accepted null network settings")
+        } catch ManagementError.invalidSetting {}
+        for source in FileSource.allCases {
+            for action in FileAction.allCases {
+                let operation = FileOperation(source: source, action: action, ids: ["item"],
+                                              directory: source.root, destination: source == .pan ? "12" : "/target",
+                                              name: "renamed", accountID: "account-1")
+                MockURLProtocol.handler = { request in
+                    try check(request.httpMethod == "POST" && request.url?.path == "/api/files/\(source.rawValue)/operations")
+                    try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=management-session")
+                    let body = try JSONDecoder().decode([String: JSONValue].self, from: requestBody(request))
+                    try check(body == operation.body)
+                    return (200, [:], Data(#"{"completed":["item"],"failed":[{"id":"failed","message":"denied"}]}"#.utf8))
+                }
+                let result = try await client.operateFiles(operation)
+                try check(result.completed == ["item"] && result.failed.first?.message == "denied")
+            }
+        }
+        MockURLProtocol.handler = { _ in throw Failure("Invalid file operations must not send requests") }
+        do {
+            _ = try await client.operateFiles(FileOperation(source: .pan, action: .delete, ids: ["1"], directory: "0"))
+            throw Failure("Invalid file operation accepted")
+        } catch ManagementError.invalidFileOperation {}
+        let archive: JSONValue = .object(["format": .string("javstrm-settings"), "version": .number(1),
+                                         "settings": .array([]), "subscriptions": .array([])])
+        let archiveData = try JSONEncoder().encode(archive)
+        MockURLProtocol.handler = { request in
+            try check(request.httpMethod == "GET" && request.url?.path == "/api/settings/export")
+            return (200, [:], archiveData)
+        }
+        let exported = try await client.exportConfiguration()
+        try check(exported == archive)
+        MockURLProtocol.handler = { request in
+            try check(request.httpMethod == "POST" && request.url?.path == "/api/settings/import")
+            try check(JSONDecoder().decode(JSONValue.self, from: requestBody(request)) == archive)
+            return (200, [:], Data(#"{"restart_required":true}"#.utf8))
+        }
+        let imported = try await client.importConfiguration(exported)
+        try check(imported["restart_required"].boolValue)
+        MockURLProtocol.handler = { _ in (503, [:], Data(#"{"error":"unavailable"}"#.utf8)) }
+        try await expect(.http(503, "unavailable")) { _ = try await client.checkSubscription(id: 2) }
+        try await expect(.http(503, "unavailable")) { _ = try await client.serverSettings(.emby) }
+        try await expect(.http(503, "unavailable")) { _ = try await client.operateFiles(
+            FileOperation(source: .local, action: .delete, ids: ["item"], directory: "/")
+        ) }
+        MockURLProtocol.handler = { _ in (401, [:], Data(#"{"code":"AUTH_REQUIRED","error":"login"}"#.utf8)) }
+        try await expect(.authenticationRequired) { _ = try await client.serverSettings(.network) }
+        let token = await client.currentToken()
+        try check(token == nil)
+        await client.close()
+    }
+
+    static func managementHistoryAndCovers() async throws {
+        let client = try mockClient()
+        await client.adoptBrowserToken(SessionToken(value: "native-tools-session"))
+        let tasks = try require(JSONSerialization.jsonObject(with: fixture("tasks")) as? [[String: Any]])
+        let sample = try require(tasks.first)
+        for kind in WorkflowHistoryKind.allCases {
+            var task = sample
+            task["type"] = kind.rawValue.replacingOccurrences(of: "-", with: "_")
+            task["status"] = "done"
+            let data = try JSONSerialization.data(withJSONObject: [
+                "items": [task], "total": 21, "page": 2, "has_more": false
+            ])
+            MockURLProtocol.handler = { request in
+                try check(request.httpMethod == "GET" && request.url?.path == kind.endpoint)
+                try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=native-tools-session")
+                let query = URLComponents(url: try require(request.url), resolvingAgainstBaseURL: false)?.queryItems
+                try check(query?.first { $0.name == "page" }?.value == "2")
+                try check(query?.first { $0.name == "q" }?.value == "测试 & +")
+                return (200, [:], data)
+            }
+            let page: WorkflowHistoryPage = try await client.get(kind.endpoint, query: [
+                .init(name: "page", value: "2"), .init(name: "q", value: "测试 & +")
+            ])
+            try check(page.items?.first?.type == kind.rawValue.replacingOccurrences(of: "-", with: "_"))
+            try check(page.total == 21 && page.page == 2 && !page.hasMore)
+        }
+        MockURLProtocol.handler = { _ in (200, [:], Data(#"{"items":null,"total":0,"page":1,"has_more":false}"#.utf8)) }
+        let empty: WorkflowHistoryPage = try await client.get(WorkflowHistoryKind.organize.endpoint)
+        try check(empty.items == nil && empty.total == 0)
+
+        let jobID = "job/with?reserved"
+        MockURLProtocol.handler = { request in
+            try check(request.httpMethod == "GET" && request.url?.path == "/api/quick-strm/jobs/history")
+            return (200, [:], Data(#"[{"id":"job/with?reserved","status":"done","stage":"finished","files":1,"processed":1,"generated":1,"skipped":0,"failed":0,"started_at":"2026-10-13T00:00:00Z"}]"#.utf8))
+        }
+        let jobs = try await client.list("/api/quick-strm/jobs/history", as: QuickJob.self)
+        try check(jobs.first?.id == jobID && jobs.first?.fraction == 1)
+        MockURLProtocol.handler = { request in
+            try check(request.httpMethod == "GET")
+            try check(request.url?.absoluteString.contains("/api/quick-strm/jobs/job%2Fwith%3Freserved/results") == true)
+            let query = URLComponents(url: try require(request.url), resolvingAgainstBaseURL: false)?.queryItems
+            try check(query?.first { $0.name == "page" }?.value == "2")
+            return (200, [:], Data(#"{"items":[{"group_id":"g1","group_name":"媒体组","kind":"strm","status":"success","source_path":"/source/a.mkv","target_path":"/target/a.strm"}],"total":51,"page":2,"has_more":false}"#.utf8))
+        }
+        let results: QuickJobResultsPage = try await client.get("/api/quick-strm/jobs/\(ServerAddress.segment(jobID))/results",
+                                                               query: [.init(name: "page", value: "2")])
+        let item = try require(results.items?.first)
+        try check(item.title == "媒体组" && item.status == "success" && results.page == 2)
+        try check(item.detailFields.first { $0.id == "group_name" }?.label == "配置组")
+        try check(item.detailFields.first { $0.id == "group_id" }?.label == "配置组标识")
+
+        MockURLProtocol.handler = { request in
+            try check(request.httpMethod == "GET" && request.url?.path == "/api/emby/covers/libraries")
+            return (200, [:], Data(#"{"libraries":[{"id":"lib1","name":"Movies","collection_type":"movies"}],"server_id":"server-identity"}"#.utf8))
+        }
+        let libraries: EmbyCoverLibraries = try await client.get("/api/emby/covers/libraries")
+        try check(libraries.libraries.first?.collectionType == "movies" && libraries.serverId == "server-identity")
+        let config: JSONValue = .object(["library_ids": .array([.string("lib1")]), "sort_by": .string("Random")])
+        let preparation: [String: JSONValue] = ["library_id": .string("lib1"), "server_id": .string(libraries.serverId), "config": config]
+        MockURLProtocol.handler = { request in
+            try check(request.httpMethod == "POST" && request.url?.path == "/api/emby/covers/prepare")
+            try check(request.value(forHTTPHeaderField: "Cookie") == "miyabi_token=native-tools-session")
+            try check(JSONDecoder().decode([String: JSONValue].self, from: requestBody(request)) == preparation)
+            return (200, [:], Data(#"{"library":{"id":"lib1","name":"Movies","collection_type":"movies"},"server_id":"server-identity","images":["data:image/jpeg;base64,aW1hZ2U="],"total":120}"#.utf8))
+        }
+        let prepared: EmbyCoverPrepared = try await client.send("POST", "/api/emby/covers/prepare", body: preparation)
+        try check(prepared.library.id == "lib1" && prepared.serverId == libraries.serverId && prepared.total == 120)
+        try check(prepared.images == ["data:image/jpeg;base64,aW1hZ2U="])
+        let upload: [String: JSONValue] = ["library_id": .string(prepared.library.id),
+                                          "server_id": .string(prepared.serverId), "image": .string("aW1hZ2U=")]
+        MockURLProtocol.handler = { request in
+            try check(request.httpMethod == "POST" && request.url?.path == "/api/emby/covers/upload")
+            try check(JSONDecoder().decode([String: JSONValue].self, from: requestBody(request)) == upload)
+            return (200, [:], Data(#"{"uploaded":true}"#.utf8))
+        }
+        let uploaded: JSONValue = try await client.send("POST", "/api/emby/covers/upload", body: upload)
+        try check(uploaded["uploaded"].boolValue)
+        MockURLProtocol.handler = { _ in (409, [:], Data(#"{"error":"Emby configuration changed"}"#.utf8)) }
+        try await expect(.http(409, "Emby configuration changed")) {
+            let _: JSONValue = try await client.send("POST", "/api/emby/covers/upload", body: upload)
+        }
         await client.close()
     }
 

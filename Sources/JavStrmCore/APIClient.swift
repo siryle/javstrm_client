@@ -73,6 +73,10 @@ public actor APIClient {
         ])
     }
 
+    public func checkSubscription(id: Int) async throws -> SubscriptionCheckResult {
+        try await send("POST", "/api/subscriptions/\(id)/enqueue")
+    }
+
     public func movieStates(_ movies: [DiscoverMovie]) async throws -> [DiscoverMovieState] {
         var result: [DiscoverMovieState] = []
         for start in stride(from: 0, to: movies.count, by: 100) {
@@ -108,7 +112,14 @@ public actor APIClient {
         _ method: String, _ path: String, query: [URLQueryItem] = [],
         body: [String: JSONValue]? = nil, as: T.Type = T.self
     ) async throws -> T {
-        let request = try makeRequest(method, path, query: query, body: body)
+        try await sendValue(method, path, query: query, value: body.map(JSONValue.object), as: T.self)
+    }
+
+    public func sendValue<T: Decodable & Sendable>(
+        _ method: String, _ path: String, query: [URLQueryItem] = [],
+        value: JSONValue? = nil, as: T.Type = T.self
+    ) async throws -> T {
+        let request = try makeRequest(method, path, query: query, body: value)
         let (data, response) = try await session.data(for: request)
         try validate(response, data: data, endpoint: path)
         storeCookie(response)
@@ -119,7 +130,7 @@ public actor APIClient {
     public func discard(
         _ method: String, _ path: String, body: [String: JSONValue]? = nil
     ) async throws {
-        let request = try makeRequest(method, path, body: body)
+        let request = try makeRequest(method, path, body: body.map(JSONValue.object))
         let (data, response) = try await session.data(for: request)
         try validate(response, data: data, endpoint: path)
         storeCookie(response)
@@ -188,7 +199,7 @@ public actor APIClient {
 
     private func makeRequest(
         _ method: String, _ path: String, query: [URLQueryItem] = [],
-        body: [String: JSONValue]? = nil
+        body: JSONValue? = nil
     ) throws -> URLRequest {
         var request = URLRequest(url: try address.endpoint(path, query: query))
         request.httpMethod = method

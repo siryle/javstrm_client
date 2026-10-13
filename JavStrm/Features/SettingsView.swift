@@ -7,7 +7,6 @@ struct SettingsView: View {
     @AppStorage("hideInBackground") private var hideInBackground = true
     @State private var pan: PanStatus?
     @State private var panError: String?
-    @State private var portal: WebDestination?
     @State private var confirmLogout = false
 
     var body: some View {
@@ -54,20 +53,20 @@ struct SettingsView: View {
                     Label("浏览服务端本地文件", systemImage: "folder")
                 }
                 NavigationLink { LogsView() } label: { Label("系统日志", systemImage: "text.alignleft") }
-                Button { portal = .init(title: "服务端工具", path: "/tools") } label: {
+                NavigationLink { ServerToolsView() } label: {
                     Label("STRM 与 Emby 工具", systemImage: "wrench.and.screwdriver")
                 }
-                Button { portal = .init(title: "高级设置", path: "/settings") } label: {
+                NavigationLink { ServerSettingsView() } label: {
                     Label("服务端完整设置", systemImage: "slider.horizontal.3")
                 }
-                Button { portal = .init(title: "文件管理", path: "/files") } label: {
+                NavigationLink { FileManagementView() } label: {
                     Label("文件复制、移动与管理", systemImage: "doc.on.doc")
                 }
             }
             Section("关于") {
                 LabeledContent("应用", value: "JavStrm")
                 LabeledContent("版本", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
-                Text("原生 iOS 客户端 · iPhone / iPad\n高级配置使用服务端管理页面。")
+                Text("原生 iOS 客户端 · iPhone / iPad")
                     .font(.footnote).foregroundStyle(.secondary)
                 Button("退出登录", role: .destructive) { confirmLogout = true }
             }
@@ -76,7 +75,6 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadPan() }
         .refreshable { await loadPan() }
-        .sheet(item: $portal, onDismiss: { Task { await loadPan() } }) { WebPortalView(destination: $0) }
         .confirmationDialog("退出 JavStrm 登录？", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("退出登录", role: .destructive) { Task { await session.logout() } }
         } message: { Text("本机会移除保存的会话。服务端正在运行的任务会继续执行。") }
