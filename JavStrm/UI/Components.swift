@@ -152,6 +152,8 @@ struct PosterView: View {
         }
         .aspectRatio(layout.aspectRatio, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        // Keep scaled image layers from receiving taps outside the visible poster.
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
         .accessibilityLabel(hideArtwork ? "封面已隐藏，\(code)" : "\(code) 封面")
         .task(id: "\(session.connectionID)|\(source)|\(hideArtwork)") {
             image = nil

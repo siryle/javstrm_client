@@ -75,6 +75,7 @@ struct DiscoverView: View {
                                 } label: {
                                     MovieCardPoster(code: movie.code, artwork: movie.artwork,
                                                     rating: movie.rating, artworkLayout: .landscape)
+                                        .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
                                 Rectangle()
@@ -87,6 +88,7 @@ struct DiscoverView: View {
                                     } label: {
                                         MovieCardCaption(code: movie.code, title: movie.title)
                                             .frame(maxWidth: .infinity, alignment: .leading)
+                                            .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
                                     let action = movie.cardAction(
