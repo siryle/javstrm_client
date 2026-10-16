@@ -136,3 +136,12 @@ bash scripts/verify.sh
 - 补充回归用例覆盖立即检查的 waiting / added / imported 响应、设置根数组与对象及格式验证、嵌套 / 未知字段保留、文件操作校验与两种来源的四种操作、配置归档验证和导入导出、8 类工作流历史、快速 STRM 结果与路径编码、Emby 媒体库 / 预览准备 / 上传请求及配置变化错误。
 - 使用已有 Tree-sitter 对 30 个 Swift 文件完成辅助语法检查；原始 JSON 字符串和 `nonisolated(unsafe)` 只在内存中适配旧语法规则。重新生成 Xcode 工程后，全部 App 源文件引用、Scheme / workspace XML、资源 JSON、接口固定样本、property list 和 `git diff --check` 检查通过。
 - 当前 `xcode-select -p` 无可用开发工具目录，且没有 `/Applications/Xcode.app`。未执行 Swift 编译器类型检查、新增回归用例、iOS 构建或真实服务写入联调；辅助语法解析不代表编译通过。未安装依赖、运行浏览器测试或构建 IPA。用户交互验收项已更新至 `docs/ACCEPTANCE.md`。
+
+## 发现页作品标签变更验证
+
+日期：2026-10-16（Asia/Shanghai）。
+
+- 已核对本地服务端 `web/src/features/discover/page.tsx` 和 `internal/api/discover.go`：最新作品使用 `main=m&sort=update`，热门作品使用 `sort=hit`，高分作品使用 `sort=score`，即将发行使用 `sort=release`；四者均按 `order=desc` 请求，不附加分类 `zone`。
+- 发现页默认显示「最新作品」，以四个作品标签替换原分类菜单和排序控件；切换标签复用分页重置及过期请求隔离逻辑。搜索继续使用独立搜索接口，清空搜索后恢复所选标签。
+- `git diff --check`、property list、资源 JSON、Xcode Swift 源文件引用及图标存在性检查通过。
+- `bash scripts/verify.sh` 因本机缺少 Xcode / Command Line Tools 而无法启动 Swift，未完成编译、核心验证或 iOS 界面验证。未安装依赖或运行浏览器测试；各标签与服务端结果一致性、分页、快速切换及搜索恢复已列入用户验收项。

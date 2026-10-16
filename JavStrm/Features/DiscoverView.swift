@@ -2,11 +2,36 @@ import SwiftUI
 import JavStrmCore
 
 struct DiscoverView: View {
+    private enum Tab: String, CaseIterable {
+        case released, popular, topRated, upcoming
+
+        var title: String {
+            switch self {
+            case .released: "最新作品"
+            case .popular: "热门作品"
+            case .topRated: "高分作品"
+            case .upcoming: "即将发行"
+            }
+        }
+
+        var query: [URLQueryItem] {
+            let sort: String
+            switch self {
+            case .released: sort = "update"
+            case .popular: sort = "hit"
+            case .topRated: sort = "score"
+            case .upcoming: sort = "release"
+            }
+            var items = [URLQueryItem(name: "sort", value: sort), URLQueryItem(name: "order", value: "desc")]
+            if self == .released { items.append(URLQueryItem(name: "main", value: "m")) }
+            return items
+        }
+    }
+
     @Environment(AppSession.self) private var session
     @State private var search = ""
     @State private var submittedSearch = ""
-    @State private var zone = "censored"
-    @State private var sort = "hit"
+    @State private var selectedTab = Tab.released
     @State private var movies: [DiscoverMovie] = []
     @State private var page = 0
     @State private var hasMore = false
@@ -24,26 +49,12 @@ struct DiscoverView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                HStack {
-                    Menu {
-                        Picker("分类", selection: $zone) {
-                            Text("有码").tag("censored")
-                            Text("无码").tag("uncensored")
-                            Text("欧美").tag("western")
-                            Text("FC2").tag("fc2")
-                            Text("动画").tag("anime")
-                        }
-                    } label: { Label(zoneName, systemImage: "line.3.horizontal.decrease.circle") }
-                    .buttonStyle(.bordered)
-                    Spacer()
-                    Picker("排序", selection: $sort) {
-                        Text("热门").tag("hit")
-                        Text("最新").tag("release")
-                        Text("高分").tag("score")
+                Picker("发现浏览方式", selection: $selectedTab) {
+                    ForEach(Tab.allCases, id: \.self) { tab in
+                        Text(tab.title).tag(tab)
                     }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 230)
                 }
+                .pickerStyle(.segmented)
                 .disabled(!submittedSearch.isEmpty)
                 if let error { ErrorPanel(message: error) { Task { await load(reset: true) } } }
                 if let actionError {
@@ -114,15 +125,11 @@ struct DiscoverView: View {
         .searchable(text: $search, prompt: "搜索番号、作品或演员")
         .onSubmit(of: .search) { submittedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines) }
         .onChange(of: search) { _, value in if value.isEmpty { submittedSearch = "" } }
-        .task(id: "\(zone)|\(sort)|\(submittedSearch)") { await load(reset: true) }
+        .task(id: "\(selectedTab.rawValue)|\(submittedSearch)") { await load(reset: true) }
         .onChange(of: session.revisions) { _, _ in
             Task { await refreshActions() }
         }
         .refreshable { await load(reset: true) }
-    }
-
-    private var zoneName: String {
-        ["censored": "有码", "uncensored": "无码", "western": "欧美", "fc2": "FC2", "anime": "动画"][zone] ?? "分类"
     }
 
     private func load(reset: Bool) async {
@@ -146,7 +153,7 @@ struct DiscoverView: View {
         let path: String
         if submittedSearch.isEmpty {
             path = "/api/discover/movies"
-            query += [URLQueryItem(name: "zone", value: zone), URLQueryItem(name: "sort", value: sort)]
+            query += selectedTab.query
         } else {
             path = "/api/discover/search"
             query.append(URLQueryItem(name: "q", value: submittedSearch))
